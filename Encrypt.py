@@ -12,11 +12,11 @@ random_generator = Random.new().read
 rsa = RSA.generate(2048, random_generator)
 
 private_key = rsa.exportKey()
-with open("/Users/zhaowenbo/wilna305/Fang3/项目/Signature/private_a.rsa", 'wb') as f:
+with open("/Users/zhaowenbo/wilna305/Fang3/项目/mobile_device1/lib/mobileDevice1_pri.rsa", 'wb') as f:
     f.write(private_key)
 
 public_key = rsa.publickey().exportKey()
-with open("/Users/zhaowenbo/wilna305/Fang3/项目/Signature/public_a.rsa", 'wb') as f:
+with open("/Users/zhaowenbo/wilna305/Fang3/项目/mobile_device1/lib/mobileDevice1_pub.rsa", 'wb') as f:
     f.write(public_key)
 
 message = "需要加密的信息"
