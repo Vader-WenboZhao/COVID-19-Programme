@@ -9,10 +9,21 @@ random_generator = Random.new().read
 rsa = RSA.generate(2048, random_generator)
 
 
+'''
 private_key = rsa.exportKey()
 with open("/Users/zhaowenbo/wilna305/Fang3/项目/Signature/private_a.rsa", 'wb') as f:
     f.write(private_key)
 
 public_key = rsa.publickey().exportKey()
 with open("/Users/zhaowenbo/wilna305/Fang3/项目/Signature/public_a.rsa", 'wb') as f:
+    f.write(public_key)
+'''
+
+
+private_key = rsa.exportKey()
+with open("/Users/zhaowenbo/wilna305/Fang3/项目/private_Geo.rsa", 'wb') as f:
+    f.write(private_key)
+
+public_key = rsa.publickey().exportKey()
+with open("/Users/zhaowenbo/wilna305/Fang3/项目/public_Geo.rsa", 'wb') as f:
     f.write(public_key)

@@ -3,6 +3,7 @@ import threading
 from BasicBlockchainProcess import *
 from Blockchain import *
 from parameters import *
+import time
 
 # 实例化Blockchain类
 ContactTracingBlockchain = Blockchain()
@@ -33,36 +34,53 @@ def notifyGeoSolver(blockchain, patientPseudonymList):
     connectedAddrList[0][0].sendall(bytes(str(messageToSend), encoding = "utf-8"))
 
 
+def deleteRiskyPseudonym(riskyPseudonymList):
+    global connectedAddrList
+    # 添加操作符, 4为删除风险假名
+    messageToSend = {'ope':4, 'riskyPseudonymList':riskyPseudonymList}
+    # connectedAddrList[0]是Geo Solver的元组
+    connectedAddrList[0][0].sendall(bytes(str(messageToSend), encoding = "utf-8"))
+
+
 def operation_thread():
     global connectedAddrList
     while True:
-        global ContactTracingBlockchain
-        order = input("Input order: ")
-        if order == "connect":
-            connectedAddrList = connect()
-        elif order == "add trace":
-            print(new_traces(ContactTracingBlockchain, connectedAddrList))
-        elif order == "chain":
-            print(full_chain(ContactTracingBlockchain))
-        elif order == "register node":
-            print(register_nodes(ContactTracingBlockchain))
-        elif order == "upload patient":
-            patientPseudonym = input("patient's pseudonym: ")
-            # 应该是传list的
-            patientPseudonym = [patientPseudonym]
-            notifyGeoSolver(ContactTracingBlockchain, patientPseudonym)
-        # elif order == "resolve conflicts":
-        #     print(consensus(ContactTracingBlockchain))
-        elif order == "quit":
-            quit(connectedAddrList)
-            if len(connectedAddrList) != 0:
-                for addrTuple in connectedAddrList:
-                    addrTuple[0].close()
-            print("Connection breaks")
-            return
-        else:
-            print("Valid order")
-            pass
+        try:
+            global ContactTracingBlockchain
+            order = input("Input order: ")
+            if order == "connect":
+                connectedAddrList = connect()
+            elif order == "add trace":
+                print(new_traces(ContactTracingBlockchain, connectedAddrList))
+            elif order == "chain":
+                print(full_chain(ContactTracingBlockchain))
+            elif order == "register node":
+                print(register_nodes(ContactTracingBlockchain))
+            elif order == "upload patient":
+                patientPseudonymList = input("patient's pseudonym list: ")
+                # 传list
+                patientPseudonymList = eval(patientPseudonymList)
+                notifyGeoSolver(ContactTracingBlockchain, patientPseudonymList)
+            elif order == "delete risk":
+                riskyPseudonymListToDelete = input("risky pseudonyms to delete: ")
+                # 传list
+                riskyPseudonymListToDelete = eval(riskyPseudonymListToDelete)
+                deleteRiskyPseudonym(riskyPseudonymListToDelete)
+            # elif order == "resolve conflicts":
+            #     print(consensus(ContactTracingBlockchain))
+            elif order == "quit":
+                quit(connectedAddrList)
+                if len(connectedAddrList) != 0:
+                    for addrTuple in connectedAddrList:
+                        addrTuple[0].close()
+                print("Connection breaks")
+                return
+            else:
+                print("Valid order")
+                pass
+        except BaseException as be:
+            print(be)
+            continue
 
 
 class Handler(socketserver.BaseRequestHandler):
@@ -104,6 +122,19 @@ class Handler(socketserver.BaseRequestHandler):
                 # client.sendall(bytes(word, encoding = "utf-8"))
 
 
+def blockchainMaintain_thread(blockchain):
+    while(True):
+        try:
+            blockchain.deleteOldBlock()
+            # 每10分钟维护一次
+            time.sleep(600)
+        except BaseException as be:
+            print(be)
+            continue
+
+
+thread_maintain = threading.Thread(target=blockchainMaintain_thread, args=(ContactTracingBlockchain,))
+thread_maintain.start()
 thread_ope = threading.Thread(target=operation_thread)
 thread_ope.start()
 server = socketserver.ThreadingTCPServer(listenAddr, Handler)   # 多线程交互

@@ -3,6 +3,7 @@ import threading
 from BasicBlockchainProcess import *
 from Blockchain import *
 from parameters import *
+import time
 
 # 实例化Blockchain类
 ContactTracingBlockchain = Blockchain()
@@ -10,6 +11,7 @@ NotificationBlockchain = Blockchain()
 # ContactTracingBlockchain.register_node(node_identifier)
 
 connectedAddrList = []
+riskyPseudonyms = set()
 
 
 def notify(addrs, message):
@@ -42,30 +44,35 @@ def findRiskyPseudonyms(blockchain, searchTime, searchLocation):
 def operation_thread():
     global connectedAddrList
     while True:
-        global ContactTracingBlockchain
-        order = input("Input order: ")
-        if order == "connect":
-            connectedAddrList = connect()
-        elif order == "chain":
-            print(full_chain(ContactTracingBlockchain))
-        elif order == "notify":
-            searchT = input("Search time: ")
-            searchL = input("search location: ")
-            print(findRiskyPseudonyms(ContactTracingBlockchain, searchT, searchL))
-        elif order == "quit":
-            quit(connectedAddrList)
-            if len(connectedAddrList) != 0:
-                for addrTuple in connectedAddrList:
-                    addrTuple[0].close()
-            print("Connection breaks")
-            return
-        else:
-            print("Valid order")
-            pass
+        try:
+            global ContactTracingBlockchain
+            order = input("Input order: ")
+            if order == "connect":
+                connectedAddrList = connect()
+            elif order == "chain":
+                print(full_chain(ContactTracingBlockchain))
+            elif order == "notify":
+                searchT = input("Search time: ")
+                searchL = input("search location: ")
+                print(findRiskyPseudonyms(ContactTracingBlockchain, searchT, searchL))
+            elif order == "quit":
+                quit(connectedAddrList)
+                if len(connectedAddrList) != 0:
+                    for addrTuple in connectedAddrList:
+                        addrTuple[0].close()
+                print("Connection breaks")
+                return
+            else:
+                print("Valid order")
+                pass
+        except BaseException as be:
+            print(be)
+            continue
 
 
 class Handler(socketserver.BaseRequestHandler):
     def handle(self):
+        global riskyPseudonyms
         while True:
             print('waiting for connect')
             while True:
@@ -94,13 +101,20 @@ class Handler(socketserver.BaseRequestHandler):
                                 ContactTracingBlockchain.chain.pop()
                     else:
                         print("New trace is invalid!")
-                # 操作符为1说明要根据时间地址查询风险用户
+                # 操作符为3说明要根据时间地址查询风险用户
                 elif self.data['ope'] == 3:
                     # [(t,l),(t,l),(t,l),...]
                     timeLocationList = self.data['timeLocationList']
-                    riskyPseudonyms = set()
+                    # riskyPseudonyms = set()
                     for TLtuple in timeLocationList:
                         riskyPseudonyms = riskyPseudonyms | findRiskyPseudonyms(ContactTracingBlockchain, TLtuple[0], TLtuple[1])
+                    notify(connectedAddrList, riskyPseudonyms)
+                # 操作符为4说明要清除风险用户
+                elif self.data['ope'] == 4:
+                    # [(n),(n),(n),...]
+                    riskyPseudonymListToDelete = self.data['riskyPseudonymList']
+                    riskyPseudonymSetToDelete = set(riskyPseudonymListToDelete)
+                    riskyPseudonyms = riskyPseudonyms - riskyPseudonymSetToDelete
                     notify(connectedAddrList, riskyPseudonyms)
                 print('-'*40)
 
@@ -108,6 +122,19 @@ class Handler(socketserver.BaseRequestHandler):
                 # client.sendall(bytes(word, encoding = "utf-8"))
 
 
+def blockchainMaintain_thread(blockchain):
+    while(True):
+        try:
+            blockchain.deleteOldBlock()
+            # 每10分钟维护一次
+            time.sleep(600)
+        except BaseException as be:
+            print(be)
+            continue
+
+
+thread_maintain = threading.Thread(target=blockchainMaintain_thread, args=(ContactTracingBlockchain,))
+thread_maintain.start()
 thread_ope = threading.Thread(target=operation_thread)
 thread_ope.start()
 server = socketserver.ThreadingTCPServer(listenAddr, Handler)   # 多线程交互

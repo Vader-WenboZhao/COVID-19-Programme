@@ -26,7 +26,7 @@ class Blockchain(object):
         # 统一各个节点的创世区块
         block = {
             'index':len(self.chain)+1,
-            'timestamp':1234567890,
+            'timestamp':9999999999,
             'traces': [],
             'proof':100,
             'previous_hash':1,
@@ -143,6 +143,17 @@ class Blockchain(object):
         # 必须确保这个字典（区块）是经过排序的，否则将会得到不一致的散列
         block_string = json.dumps(block,sort_keys=True).encode()
         return hashlib.sha256(block_string).hexdigest()
+
+
+    def deleteOldBlock(self):
+        while(True):
+            #  创建区块超过十四天
+            if int(time()) - self.chain[0]['timestamp'] >= 1209600:
+                self.chain.remove(self.chain[0])
+                continue
+            else:
+                break
+
 
     @property
     def last_block(self):
