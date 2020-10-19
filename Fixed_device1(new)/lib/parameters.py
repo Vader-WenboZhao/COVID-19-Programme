@@ -14,4 +14,4 @@ LOCATION = 'Location_#1'
 
 ''' UDP '''
 
-regionServerShenzhen = 'Shenzhen'
+regionServerNum = 'Shenzhen'
