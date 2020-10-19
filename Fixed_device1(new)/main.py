@@ -18,10 +18,6 @@ fixed device 从 mobile device 接收到只包含假名的记录, 向 region ser
 '''
 
 riskyPseudonymSet = set()
-
-# 测试:
-riskyPseudonymSet.add('JEGHi0awct1aRMl1')
-
 localTraces = []
 seconds = 0
 WAITINGTIME = 5
@@ -221,26 +217,9 @@ def receive():
             print(e)
             continue
 
-'''
-def operation_thread():
-    global riskyPseudonymSet
-    while True:
-        try:
-            order = input("Input order: ")
-            if order == "add trace":
-                pseudonym = input("pseudonym: ")
-                print(createTrace(pseudonym))
-            elif order == "risky names":
-                print(riskyPseudonymSet)
-        except BaseException as be:
-            print(be)
-            continue
-'''
-
 # 调试用函数
 def printLocalTraces():
     print(localTraces)
 
-# thread_ope = _thread.start_new_thread(operation_thread,())
 sendToRegionServer = _thread.start_new_thread(sendToRegionServer,())
 thread_receive = _thread.start_new_thread(receive,())
