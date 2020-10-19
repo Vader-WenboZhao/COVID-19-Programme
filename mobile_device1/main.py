@@ -14,7 +14,8 @@ import myrandom
 
 pycom.heartbeat(False)
 # pseudonym: {'name':'...', 'timestamp': ...}
-riskyNames = set()
+riskyNames = []
+usedNames = []
 # 最新的更新密钥的时间
 latestUpdateTime = None
 PUBLICKEY = None
@@ -24,13 +25,16 @@ presentPseudonym = None
 # 重发信息标记
 RESENDSYMBOL = True
 # 最近发送的消息编号
-LATESTMESSAGENUMBER = 0
+latestMessageNumber = 0
+RISKYLEVEL = 0 # 0:无风险(绿); 1:有风险(黄); 2:确诊(红);
+LEVELCOLOR = {0: 0x000f00, 1: 0x0f0f00, 2: 0x0f0000}
 
 
+'''
 with open('lib/public.pem') as f:
     PUBLICKEY = f.read()
     f.close()
-
+'''
 
 
 # LED灯闪烁
@@ -40,6 +44,13 @@ def blink(num = 3, period = .5, color = 0):
         pycom.rgbled(color)
         time.sleep(period)
         pycom.rgbled(0)
+
+
+def displayRiskyLevel():
+    global levelColor
+    while True:
+        blink(color = LEVELCOLOR[RISKYLEVEL])
+        time.sleep(2)
 
 
 # 删除过期(14days)的假名
@@ -55,6 +66,7 @@ def deleteOldNames(nameList):
 
 # 保存新的假名、删除过期的假名
 def savePseudonym(newName):
+    global usedNames
     # newName是字符串
     # 如果文件不存在
     try:
@@ -66,6 +78,8 @@ def savePseudonym(newName):
         listPseudonyms = []
         print(be)
     deleteOldNames(listPseudonyms)
+    # 更新使用过的假名列表(内存中)
+    usedNames = listPseudonyms
     listPseudonyms.append({'name': newName, 'timestamp': time.time()})
     f = open('usedPseudonyms.txt', 'w')
     f.write(str(listPseudonyms))
@@ -136,14 +150,28 @@ def updatePseudonym():
             latestUpdateTime = time.time()
             savePseudonym(presentPseudonym)
 
+
+def matchRiskyNames():
+    global riskyNames
+    global usedNames
+    if len(riskyNames) == 0:
+        return
+    for rName in riskyNames:
+        for uNameDict in usedNames:
+            if rName == uNameDict['name']:
+                RISKYLEVEL = 1
+            else:
+                continue
+
+
 '''
 #真实的代码
 def sender():
     while True:
         try:
-            LATESTMESSAGENUMBER = int(myrandom.RandomRange(100000, 999999))
-            print(LATESTMESSAGENUMBER)
-            messageToSend = json.dumps({'name': presentPseudonym, 'deviceType': 'mobile', 'messageNumber': LATESTMESSAGENUMBER})
+            latestMessageNumber = int(myrandom.RandomRange(100000, 999999))
+            print(latestMessageNumber)
+            messageToSend = json.dumps({'name': presentPseudonym, 'deviceType': 'mobile', 'messageNumber': latestMessageNumber})
             socketToFixedDevice.send(messageToSend)
             RESENDSYMBOL = True
             # 未收到ACK则每10s重复发信息, 重复5次无果则放弃
@@ -163,11 +191,15 @@ def sender():
 
 '''测试代码'''
 def sender():
+    global latestMessageNumber
     while True:
         try:
-            LATESTMESSAGENUMBER = int(myrandom.RandomRange(100000, 999999))
-            messageToSend = json.dumps({'name': presentPseudonym, 'deviceType': 'mobile', 'messageNumber': LATESTMESSAGENUMBER})
-            socketToFixedDevice.send(messageToSend)
+            latestMessageNumber = int(myrandom.RandomRange(1000000000, 9999999999))
+            messageToSend = {'name': presentPseudonym, 'sendDevice': 'mobileDevice', 'messageNumber': latestMessageNumber}
+            messageToSendJson = json.dumps(messageToSend)
+            socketToFixedDevice.send(messageToSendJson)
+            # mobile不重复发送了
+            '''
             RESENDSYMBOL = True
             # 未收到ACK则每10s重复发信息, 重复5次无果则放弃
             count = 0
@@ -175,27 +207,34 @@ def sender():
                 time.sleep(1)
                 socketToFixedDevice.send(messageToSend)
                 count += 1
+            '''
             # 每10分钟向外发射一次信息
             time.sleep(10)
+            # print("send:", messageToSendJson)
         except BaseException as be:
+            print('Error in send')
             print(be)
-            sleep(10)
+            time.sleep(10)
             continue
 
 
-
-
+# mobile device 不接收信息
 def receiver():
+    global latestMessageNumber
+    global riskyNames
     while True:
         try:
-            receivedJson = socketFromFixedDevice.recv(256)
+            receivedJson = socketFromFixedDevice.recv(1024)
             receivedMessage = json.loads(receivedJson)
-            #  收到ACK则停止重复发送信息
-            print(receivedMessage)
-            if receivedMessage['deviceType'] == 'fixed' and receivedMessage['ACK'] == True and receivedMessage['messageNumber'] == LATESTMESSAGENUMBER:
-                RESENDSYMBOL = False
-        except BaseException as be:
-            print(be)
+            #  收到ACK则停止重复发送信息, 每次ACK附带有风险名单
+            if receivedMessage['sendDevice'] == 'fixedDevice' and ('ACK' in receivedMessage.keys()):
+                if receivedMessage['ACK'] and receivedMessage['messageNumber'] == latestMessageNumber:
+                    # RESENDSYMBOL = False
+                    riskyNames = receivedMessage['riskyNames'] # 只包含名字的列表
+                    matchRiskyNames()
+        except Exception as e:
+            print("Error in receive")
+            print(e)
             time.sleep(10)
             continue
 
@@ -212,6 +251,8 @@ def printPseudonyms():
 
 
 
+cleanPseudonyms()
 pseudonymThread = _thread.start_new_thread(updatePseudonym, ())
 senderThread = _thread.start_new_thread(sender, ())
 receiverThread = _thread.start_new_thread(receiver, ())
+displayColorThread = _thread.start_new_thread(displayRiskyLevel, ())
