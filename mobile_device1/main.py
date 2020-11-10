@@ -9,8 +9,12 @@ import crypto
 import myrandom
 
 
-'''注: lopy4一旦关机时间戳就重置'''
+'''
+注: lopy4一旦关机时间戳就重置
+LoRa的频段都是LoRa.CN470
+'''
 
+LoRaBand = LoRa.CN470
 
 pycom.heartbeat(False)
 # pseudonym: {'name':'...', 'timestamp': ...}
@@ -23,9 +27,9 @@ H = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 # 现在的假名
 presentPseudonym = None
 # 重发信息标记
-RESENDSYMBOL = True
+# RESENDSYMBOL = True
 # 最近发送的消息编号
-latestMessageNumber = 0
+# latestMessageNumber = 0
 RISKYLEVEL = 0 # 0:无风险(绿); 1:有风险(黄); 2:确诊(红);
 LEVELCOLOR = {0: 0x000f00, 1: 0x0f0f00, 2: 0x0f0000}
 
@@ -105,7 +109,7 @@ def generatePseudonym():
     return ranstr(16)
 
 
-lora = LoRa(mode=LoRa.LORA, region=LoRa.CN470, sf=7)
+lora = LoRa(mode=LoRa.LORA, region=LoRaBand, sf=7)
 
 
 # 数据包发送套接字
@@ -164,74 +168,32 @@ def matchRiskyNames():
                 continue
 
 
-'''
-#真实的代码
-def sender():
-    while True:
-        try:
-            latestMessageNumber = int(myrandom.RandomRange(100000, 999999))
-            print(latestMessageNumber)
-            messageToSend = json.dumps({'name': presentPseudonym, 'deviceType': 'mobile', 'messageNumber': latestMessageNumber})
-            socketToFixedDevice.send(messageToSend)
-            RESENDSYMBOL = True
-            # 未收到ACK则每10s重复发信息, 重复5次无果则放弃
-            count = 0
-            while RESENDSYMBOL == True and count <= 4:
-                time.sleep(10)
-                socketToFixedDevice.send(messageToSend)
-                count += 1
-            # 每10分钟向外发射一次信息
-            time.sleep(600)
-        except BaseException as be:
-            print(be)
-            sleep(10)
-            continue
-'''
-
-
-'''测试代码'''
-def sender():
-    global latestMessageNumber
-    while True:
-        try:
-            latestMessageNumber = int(myrandom.RandomRange(1000000000, 9999999999))
-            messageToSend = {'name': presentPseudonym, 'sendDevice': 'mobileDevice', 'messageNumber': latestMessageNumber}
-            messageToSendJson = json.dumps(messageToSend)
-            socketToFixedDevice.send(messageToSendJson)
-            # mobile不重复发送了
-            '''
-            RESENDSYMBOL = True
-            # 未收到ACK则每10s重复发信息, 重复5次无果则放弃
-            count = 0
-            while RESENDSYMBOL == True and count <= 4:
-                time.sleep(1)
-                socketToFixedDevice.send(messageToSend)
-                count += 1
-            '''
-            # 每10分钟向外发射一次信息
-            time.sleep(10)
-            # print("send:", messageToSendJson)
-        except BaseException as be:
-            print('Error in send')
-            print(be)
-            time.sleep(10)
-            continue
-
-
 # mobile device 不接收信息
 def receiver():
-    global latestMessageNumber
+    global socketFromFixedDevice
     global riskyNames
+    
     while True:
         try:
-            receivedJson = socketFromFixedDevice.recv(1024)
+            print("123")
+            receivedJson = socketFromFixedDevice.recv(256)
+            print(receivedJson)
             receivedMessage = json.loads(receivedJson)
             #  收到ACK则停止重复发送信息, 每次ACK附带有风险名单
-            if receivedMessage['sendDevice'] == 'fixedDevice' and ('ACK' in receivedMessage.keys()):
-                if receivedMessage['ACK'] and receivedMessage['messageNumber'] == latestMessageNumber:
-                    # RESENDSYMBOL = False
+            if receivedMessage['sendDevice'] == 'fixedDevice' and ('wake' in receivedMessage.keys()):
+                if receivedMessage['wake']:
+                    # print("Waking up ...")
                     riskyNames = receivedMessage['riskyNames'] # 只包含名字的列表
+                    messageToSend = {'name': presentPseudonym, 'sendDevice': 'mobileDevice'}
+                    messageToSendJson = json.dumps(messageToSend)
+                    socketToFixedDevice.send(messageToSendJson)
                     matchRiskyNames()
+
+                    '''# 真实代码每发送一次休息5分钟, 下一次唤醒信息也得5分钟后到达
+                    time.sleep(300)'''
+                    # 测试代码
+                    time.sleep(5)
+
         except Exception as e:
             print("Error in receive")
             print(e)
@@ -250,9 +212,8 @@ def printPseudonyms():
     f.close()
 
 
-
+# 测试, 真正情况下不启动就清理Pseudonyms
 cleanPseudonyms()
 pseudonymThread = _thread.start_new_thread(updatePseudonym, ())
-senderThread = _thread.start_new_thread(sender, ())
 receiverThread = _thread.start_new_thread(receiver, ())
 displayColorThread = _thread.start_new_thread(displayRiskyLevel, ())
