@@ -14,7 +14,7 @@ import myrandom
 LoRa的频段都是LoRa.CN470
 '''
 
-LoRaBand = LoRa.CN470
+LoRaBand = LoRa.EU868
 
 pycom.heartbeat(False)
 # pseudonym: {'name':'...', 'timestamp': ...}
@@ -172,7 +172,7 @@ def matchRiskyNames():
 def receiver():
     global socketFromFixedDevice
     global riskyNames
-    
+
     while True:
         try:
             print("123")

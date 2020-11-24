@@ -15,7 +15,7 @@ import struct
 
 pycom.heartbeat(False)
 
-LoRaBand = LoRa.CN470
+LoRaBand = LoRa.EU868
 
 # A basic package header, B: 1 byte for the deviceId, B: 1 byte for the pkg size
 _LORA_PKG_FORMAT = "BB%ds"
