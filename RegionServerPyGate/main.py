@@ -1,50 +1,68 @@
 from network import WLAN
+from network import LoRa
 import time
 import machine
 from machine import RTC
 import pycom
 import socket
+import json
+import os
+import struct
+import _thread
 
-print('\nStarting LoRaWAN concentrator')
-# Disable Hearbeat
-pycom.heartbeat(False)
 
-# Define callback function for Pygate events
-def machine_cb (arg):
-    evt = machine.events()
-    if (evt & machine.PYGATE_START_EVT):
-        # Green
-        pycom.rgbled(0x103300)
-    elif (evt & machine.PYGATE_ERROR_EVT):
-        # Red
-        pycom.rgbled(0x331000)
-    elif (evt & machine.PYGATE_STOP_EVT):
-        # RGB off
-        pycom.rgbled(0x000000)
+'''
+LoRa part
+'''
+LoRaBand = LoRa.EU868
 
-# register callback function
-machine.callback(trigger = (machine.PYGATE_START_EVT | machine.PYGATE_STOP_EVT | machine.PYGATE_ERROR_EVT), handler=machine_cb)
+# lora = LoRa(mode=LoRa.LORA, tx_iq=True, region=LoRaBand)
+lora = LoRa(mode=LoRa.LORA, region=LoRa.EU868)
+lora_sock = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
+lora_sock.setblocking(False)
 
-print('Connecting to WiFi...',  end='')
+localTraces = []
+
+'''
+wifi part
+'''
+# outdoor hotspot
+# PCAddr = ('172.20.10.3', 8081)
+# indoor Wi-Fi
+PCAddr = ('192.168.1.100', 8090)
+print('\nConnecting to WiFi...',  end='')
 # Connect to a Wifi Network
 wlan = WLAN(mode=WLAN.STA)
-wlan.connect(ssid='zwbHotspot', auth=(WLAN.WPA2, "zhaowenbo"))
+
+# 室外用热点
+# wlan.connect(ssid='zwbHotspot', auth=(WLAN.WPA2, "zhaowenbo"))
+# 室内用Wi-Fi
+wlan.connect(ssid='WiLNA305', auth=(WLAN.WPA2, "305netlab"))
 
 while not wlan.isconnected():
     print('.', end='')
     time.sleep(1)
 print(" OK")
 
+
+'''
+Sync time
+'''
 # Sync time via NTP server for GW timestamps on Events
 print('Syncing RTC via ntp...', end='')
 rtc = RTC()
-rtc.ntp_sync(server="time1.aliyun.com")
+
+# 室外
+# rtc.ntp_sync(server="ntp.aliyun.com")
+# 室内
+rtc.ntp_sync(server="time.dlut.edu.cn")
 
 while not rtc.synced():
     print('.', end='')
     time.sleep(.5)
 print(" OK\n")
 
+'''
 # Read the GW config file from Filesystem
 fp = open('/flash/config.json','r')
 buf = fp.read()
@@ -53,34 +71,72 @@ buf = fp.read()
 machine.pygate_init(buf)
 # disable degub messages
 # machine.pygate_debug_level(1)
+'''
 
-messageToSend = 'This message is from PyGate'
 
-mySocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-PCAddr = ('172.20.10.3', 8081)
-mySocket.connect(PCAddr)
+socketToPC = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+
 while True:
-    mySocket.send(b'123')
-    time.sleep(3)
+    try:
+        time.sleep(3)
+        socketToPC.connect(PCAddr)
+        break
+    except BaseException as be:
+        print(be)
+        continue
 
-'''
-eth = ETH()
+def sendToPCPart():
+    global localTraces
 
-eth.init()
-eth.hostname('gate1')
+    while True:
+        if len(localTraces) == 0:
+            time.sleep(1)
+            continue
+        try:
+            messageToSend = bytes(str(localTraces[0]), 'utf-8')
+            socketToPC.send(messageToSend)
+            localTraces.remove(localTraces[0])
+            time.sleep(1)
+        except BaseException as be:
+            print("PCPart", be)
+            continue
 
-messageToSend = 'This message is from PyGate'
 
-mySocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-PCAddr = ('127.0.0.1', 8082)
-mySocket.connect(PCAddr)
-mySocket.sendall(bytes(str(messageToSend), encoding = "utf-8"))
+_LORA_PKG_FORMAT = "BB%ds"
+_LORA_PKG_ACK_FORMAT = "BBB"
+_LORA_PKG_TIME_ACK_FORMAT = "!BBL"
 
-print("connecting...")
-while not eth.isconnected():
-    time.sleep(1)
-    print(".", end='')
+def recvFromFixedDevice():
+    global localTraces
 
-print(eth.ifconfig())
-print(socket.getaddrinfo("pycom.io", 80))
-'''
+    while True:
+        recv_pkg = lora_sock.recv(512)
+        if (len(recv_pkg) > 2):
+            recv_pkg_len = recv_pkg[1]
+
+            device_id, pkg_len, msgJson = struct.unpack(_LORA_PKG_FORMAT % recv_pkg_len, recv_pkg)
+            msgStr = msgJson.decode()
+            try:
+                msg = eval(msgStr)
+            except BaseException:
+                continue
+
+            if 'timeAsk' in msg.keys() and msg['timeAsk']==True:
+                ack_pkg = struct.pack(_LORA_PKG_TIME_ACK_FORMAT, device_id, 1, time.mktime(rtc.now()))
+                lora_sock.send(ack_pkg)
+                continue
+            else:
+                # sendMessage = {'traces': localTraces[0], 'sendDevice': 'fixedDevice', 'aim': regionServerNum}
+                if msg['sendDevice'] == 'fixedDevice':
+                    localTraces.append(msg['traces'])
+                ack_pkg = struct.pack(_LORA_PKG_ACK_FORMAT, device_id, 1, 200)
+                lora_sock.send(ack_pkg)
+
+            '''
+            ack_pkg = struct.pack(_LORA_PKG_ACK_FORMAT, device_id, 1, 200)
+            lora_sock.send(ack_pkg)
+            '''
+
+
+threadRecvFromFixedDevice = _thread.start_new_thread(recvFromFixedDevice,())
+threadSendToPCPart = _thread.start_new_thread(sendToPCPart,())

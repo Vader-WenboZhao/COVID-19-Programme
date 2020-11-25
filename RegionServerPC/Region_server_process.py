@@ -2,7 +2,11 @@ import socketserver
 import threading
 import time
 
-listenAddr = ('172.20.10.3', 8081)
+# outdoor
+# listenAddr = ('172.20.10.3', 8081)
+# indoor
+listenAddr = ('192.168.1.100', 8090)
+
 class Handler(socketserver.BaseRequestHandler):
     def handle(self):
         while True:

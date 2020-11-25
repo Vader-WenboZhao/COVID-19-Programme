@@ -148,8 +148,10 @@ def sendToRegionServer():
     # 时间校对, 误差为秒级
     # timeMessage = {'sendDevice': 'fixedDevice', 'aim': regionServerNum, 'timeAsk': True}
     timeMessage = {'sendDevice': 'fixedDevice', 'timeAsk': True}
-    timeMessageJson = json.dumps(timeMessage)
-    pkgTime = struct.pack(_LORA_PKG_FORMAT % len(timeMessageJson), DEVICE_ID, len(timeMessageJson), timeMessageJson)
+    timeMessage = str(timeMessage)
+    '''timeMessageJson = json.dumps(timeMessage)
+    pkgTime = struct.pack(_LORA_PKG_FORMAT % len(timeMessageJson), DEVICE_ID, len(timeMessageJson), timeMessageJson)'''
+    pkgTime = struct.pack(_LORA_PKG_FORMAT % len(timeMessage), DEVICE_ID, len(timeMessage), timeMessage)
     socketToRegionServer.send(pkgTime)
 
     waiting_ack = True
@@ -158,6 +160,7 @@ def sendToRegionServer():
         if timeHasReceived == True:
             break
         socketToRegionServer.send(pkgTime)
+        print(pkgTime)
         continue
 
         '''
@@ -174,11 +177,13 @@ def sendToRegionServer():
         if len(localTraces)>=1:
             case = 1
             sendMessage = {'traces': localTraces[0], 'sendDevice': 'fixedDevice', 'aim': regionServerNum}
+            sendMessage = str(sendMessage)
         else:
             continue
 
-        sendJson = json.dumps(sendMessage)
-        pkgTrace = struct.pack(_LORA_PKG_FORMAT % len(sendJson), DEVICE_ID, len(sendJson), sendJson)
+        '''sendJson = json.dumps(sendMessage)
+        pkgTrace = struct.pack(_LORA_PKG_FORMAT % len(sendJson), DEVICE_ID, len(sendJson), sendJson)'''
+        pkgTrace = struct.pack(_LORA_PKG_FORMAT % len(sendMessage), DEVICE_ID, len(sendMessage), sendMessage)
         socketToRegionServer.send(pkgTrace)
         # print(pkgTrace)
 
@@ -197,6 +202,7 @@ def receive():
     global waiting_ack
     global socketReceive
     global timeHasReceived
+    global timeDifference
 
 
     while True:
@@ -205,7 +211,8 @@ def receive():
         while not timeHasReceived:
             if (len(recvMessage) > 0):
                 device_id, pkg_len, timeGet = struct.unpack(_LORA_PKG_TIME_ACK_FORMAT, recvMessage)
-                if type(timeGet) != type(1605003234):
+                # if type(timeGet) != type(1605003234):
+                if not isinstance(timeGet, int):
                     recvMessage = socketReceive.recv(256)
                     continue
                 if (device_id == DEVICE_ID):
