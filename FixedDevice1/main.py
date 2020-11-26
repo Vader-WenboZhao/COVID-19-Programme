@@ -17,11 +17,6 @@ pycom.heartbeat(False)
 
 LoRaBand = LoRa.EU868
 
-# A basic package header, B: 1 byte for the deviceId, B: 1 byte for the pkg size
-_LORA_PKG_FORMAT = "BB%ds"
-_LORA_PKG_ACK_FORMAT = "BBB"
-_LORA_PKG_TIME_ACK_FORMAT = "!BBL"
-
 # 自己的编号大小为 1 byte
 DEVICE_ID = 0x01
 
@@ -72,67 +67,6 @@ socketReceive = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketReceive.setblocking(True)
 
 
-
-''' # 旧版
-def sendToRegionServer():
-    global localTraces
-    global riskyPseudonymSet
-    global socketToRegionServer
-    global socketReceive
-    global WaitingNum
-    global HasReceived
-    global timeHasReceived
-    global case
-
-    # 时间校对, 误差为秒级
-    sendMessage = {'number': int(myrandom.RandomRange(1000000000,9999999999)), 'sendDevice': 'fixedDevice', 'aim': regionServerNum, 'timeAsk': True}
-    sendJson = json.dumps(sendMessage)
-    socketToRegionServer.send(sendJson)
-    WaitingNum = sendMessage['number']
-    timeHasReceived = False
-    while True:
-        time.sleep(2)
-        # 校对成功
-        if timeHasReceived:
-            break
-        else:
-            socketToRegionServer.send(sendJson)
-            continue
-
-    case = 1
-    while True:
-        # 六位随机数作为序列号
-        # UDP长度有限, 最多一次传1条trace!
-        if len(localTraces)>1:
-            case = 1
-            sendMessage = {'number': int(myrandom.RandomRange(1000000000,9999999999)), 'traces': localTraces[0], 'sendDevice': 'fixedDevice', 'aim': regionServerNum}
-        elif len(localTraces)==1:
-            case = 2
-            sendMessage = {'number': int(myrandom.RandomRange(1000000000,9999999999)), 'traces': localTraces, 'sendDevice': 'fixedDevice', 'aim': regionServerNum}
-        else:
-            time.sleep(10)
-            continue
-
-        sendJson = json.dumps(sendMessage)
-        # print(sendJson)
-        socketToRegionServer.send(sendJson)
-        WaitingNum = sendMessage['number']
-        HasReceived = False
-
-        while True:
-            time.sleep(WAITINGTIME)
-            if HasReceived:
-                break
-            else:
-                # print("Waiting for ACK timeout, resend ...")
-                socketToRegionServer.send(sendJson)
-                # print(sendJson)
-                continue
-
-        continue
-'''
-
-
 def sendToRegionServer():
     global waiting_ack
     global localTraces
@@ -150,8 +84,8 @@ def sendToRegionServer():
     timeMessage = {'sendDevice': 'fixedDevice', 'timeAsk': True}
     timeMessage = str(timeMessage)
     '''timeMessageJson = json.dumps(timeMessage)
-    pkgTime = struct.pack(_LORA_PKG_FORMAT % len(timeMessageJson), DEVICE_ID, len(timeMessageJson), timeMessageJson)'''
-    pkgTime = struct.pack(_LORA_PKG_FORMAT % len(timeMessage), DEVICE_ID, len(timeMessage), timeMessage)
+    pkgTime = struct.pack("BB%ds" % len(timeMessageJson), DEVICE_ID, len(timeMessageJson), timeMessageJson)'''
+    pkgTime = struct.pack("BB%ds" % len(timeMessage), DEVICE_ID, len(timeMessage), timeMessage)
     socketToRegionServer.send(pkgTime)
 
     waiting_ack = True
@@ -160,30 +94,21 @@ def sendToRegionServer():
         if timeHasReceived == True:
             break
         socketToRegionServer.send(pkgTime)
-        print(pkgTime)
+        # print(pkgTime)
         continue
-
-        '''
-        if (len(recv_ack) > 0):
-            device_id, pkg_len, timeGet = struct.unpack(_LORA_PKG_TIME_ACK_FORMAT, recv_ack)
-            if (device_id == DEVICE_ID):
-                timeDifference = timeGet
-                print("Time difference is", timeDifference)
-                break
-        '''
 
 
     while True:
         if len(localTraces)>=1:
             case = 1
-            sendMessage = {'traces': localTraces[0], 'sendDevice': 'fixedDevice', 'aim': regionServerNum}
+            sendMessage = {'traces': localTraces[0], 'sendDevice': 'fixedDevice'}
             sendMessage = str(sendMessage)
         else:
             continue
 
         '''sendJson = json.dumps(sendMessage)
-        pkgTrace = struct.pack(_LORA_PKG_FORMAT % len(sendJson), DEVICE_ID, len(sendJson), sendJson)'''
-        pkgTrace = struct.pack(_LORA_PKG_FORMAT % len(sendMessage), DEVICE_ID, len(sendMessage), sendMessage)
+        pkgTrace = struct.pack("BB%ds" % len(sendJson), DEVICE_ID, len(sendJson), sendJson)'''
+        pkgTrace = struct.pack("BB%ds" % len(sendMessage), DEVICE_ID, len(sendMessage), sendMessage)
         socketToRegionServer.send(pkgTrace)
         # print(pkgTrace)
 
@@ -203,6 +128,7 @@ def receive():
     global socketReceive
     global timeHasReceived
     global timeDifference
+    global riskyPseudonymSet
 
 
     while True:
@@ -210,7 +136,7 @@ def receive():
 
         while not timeHasReceived:
             if (len(recvMessage) > 0):
-                device_id, pkg_len, timeGet = struct.unpack(_LORA_PKG_TIME_ACK_FORMAT, recvMessage)
+                device_id, pkg_len, timeGet = struct.unpack("!BBL", recvMessage)
                 # if type(timeGet) != type(1605003234):
                 if not isinstance(timeGet, int):
                     recvMessage = socketReceive.recv(256)
@@ -224,69 +150,28 @@ def receive():
         if (len(recvMessage) > 0):
             try:
                 message = json.loads(recvMessage)
+                print(message)
                 if message['sendDevice'] == "mobileDevice":
                     newTrace = createTrace(message['name'])
                     continue
             except BaseException:
-                device_id, pkg_len, ack = struct.unpack(_LORA_PKG_ACK_FORMAT, recvMessage)
+                # 先读出串的长度，然后按这个长度读出串
+                strLength, device_id, ack = struct.unpack("iBB", recvMessage[0:6])
+                # print(strLength, device_id, ack)
+                try:
+                    riskyNamesStr = struct.unpack(str(strLength) + "s", recvMessage[6:6+strLength])
+                except ValueError:
+                    continue
+                # 是个元组
+                riskyPseudonymSet = eval(riskyNamesStr[0])
+                # recv_str_len, device_id, pkg_len, ack, riskyNamesStr = struct.unpack("iBBB" + str(recv_str_len) + "s", recvMessage)
             if (device_id == DEVICE_ID):
                 if (ack == 200):
                     waiting_ack = False
-                    print("ACK")
+                    print("ACK", riskyPseudonymSet)
                 else:
                     waiting_ack = False
                     print("Message Failed")
-
-
-''' # 旧代码
-def receive():
-    global HasReceived
-    global case
-    global riskyPseudonymSet
-    global timeHasReceived
-    global timeDifference
-
-    # 时间校对
-    if timeHasReceived == False:
-        while True:
-            try:
-                recvJsonData = socketReceive.recv(256)
-                recvData = json.loads(recvJsonData)
-                if recvData['sendDevice'] == "regionServer" and ('timestamp' in recvData.keys()) and recvData['number'] == WaitingNum:
-                    timeDifference = int(recvData['timestamp'] - time.time())
-                    # 校对成功
-                    timeHasReceived = True
-            except Exception as e:
-                print("Error in receive thread!")
-                print(e)
-                continue
-
-    while True:
-        try:
-            recvJsonData = socketReceive.recv(256)
-            recvData = json.loads(recvJsonData)
-            # print(recvData)
-            # 从 region server 收到 ACK 和风险名单数据
-            if recvData['sendDevice'] == "regionServer" and ('ACK' in recvData.keys()):
-                if(recvData['ACK'] and recvData['number'] == WaitingNum):
-                    # signal.alarm(0)
-                    HasReceived = True
-                    print("Receive ACK")
-                    if case == 1:
-                        localTraces.remove(localTraces[0])
-                    else:
-                        localTraces = []
-                riskyPseudonymSet = recvData['riskyPseudonyms']
-            # 从 mobile device 收到 trace 数据
-            elif recvData['sendDevice'] == "mobileDevice":
-                newTrace = createTrace(recvData['name'])
-        except Exception as e:
-            print("Error in receive thread!")
-            print(e)
-            continue
-'''
-
-
 
 
 
@@ -299,7 +184,7 @@ def wakeup():
         '''# 正确代码, 每5分钟广播一次唤醒信息
         time.sleep(300)'''
         # 测试代码
-        time.sleep(10)
+        time.sleep(20)
 
 
 # 调试用函数

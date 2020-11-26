@@ -175,15 +175,13 @@ def receiver():
 
     while True:
         try:
-            print("123")
             receivedJson = socketFromFixedDevice.recv(256)
-            print(receivedJson)
             receivedMessage = json.loads(receivedJson)
-            #  收到ACK则停止重复发送信息, 每次ACK附带有风险名单
             if receivedMessage['sendDevice'] == 'fixedDevice' and ('wake' in receivedMessage.keys()):
                 if receivedMessage['wake']:
                     # print("Waking up ...")
                     riskyNames = receivedMessage['riskyNames'] # 只包含名字的列表
+                    print(riskyNames)
                     messageToSend = {'name': presentPseudonym, 'sendDevice': 'mobileDevice'}
                     messageToSendJson = json.dumps(messageToSend)
                     socketToFixedDevice.send(messageToSendJson)
@@ -192,11 +190,11 @@ def receiver():
                     '''# 真实代码每发送一次休息5分钟, 下一次唤醒信息也得5分钟后到达
                     time.sleep(300)'''
                     # 测试代码
-                    time.sleep(5)
+                    time.sleep(10)
 
         except Exception as e:
-            print("Error in receive")
-            print(e)
+            # print("Error in receive")
+            # print(e)
             time.sleep(10)
             continue
 
@@ -211,8 +209,7 @@ def printPseudonyms():
     print(f.read())
     f.close()
 
-
-# 测试, 真正情况下不启动就清理Pseudonyms
+# 测试, 真正情况下不 启动就清理Pseudonyms
 cleanPseudonyms()
 pseudonymThread = _thread.start_new_thread(updatePseudonym, ())
 receiverThread = _thread.start_new_thread(receiver, ())

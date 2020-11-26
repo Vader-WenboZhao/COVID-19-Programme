@@ -49,31 +49,61 @@ def connect():
     print("Connected successfully")
     return connectedAddrList
 
+
+'''
 # 创建交trace请求
-def new_traces(blockchain, connectedAddrList, nameList):
-    pseudonymList = eval(nameList)
+def new_traces(blockchain, connectedAddrList, pseudonym, location, timestamp):
+    # pseudonymList = eval(nameList)
 
     #创建一个新的交易, 每满BLOCKLENGTH个traces就产生一个块
-    for pseudonym in pseudonymList:
-        returnResult = blockchain.new_trace(pseudonym, False, LOCATION, PRI_KEY_PATH)
-        index = returnResult[0]
-        newTrace = returnResult[1]
-        if len(connectedAddrList)!= 0:
-            messageToSend = newTrace.dictForm()
-            # 添加操作符, 1为新增trace
-            messageToSend['ope'] = 1
-            # 通过确定块内最后一条trace来统一新的区块的timestamp
-            if len(blockchain.current_traces) == BLOCKLENGTH:
-                messageToSend['is_current_traces_full'] = True
-                mine(blockchain)
-                blockTimestamp = blockchain.chain[-1]['timestamp']
-                messageToSend['block_timestamp'] = blockTimestamp
-            else:
-                messageToSend['is_current_traces_full'] = False
-            for addrTuple in connectedAddrList:
-                addrTuple[0].sendall(bytes(str(messageToSend), encoding = "utf-8"))
-        response = {'message': f'trace will be added to Block {index}'}
+    returnResult = blockchain.new_trace(pseudonym, False, location, PRI_KEY_PATH)
+    index = returnResult[0]
+    newTrace = returnResult[1]
+    if len(connectedAddrList)!= 0:
+        messageToSend = newTrace.dictForm()
+        # 添加操作符, 1为新增trace
+        messageToSend['ope'] = 1
+        # 通过确定块内最后一条trace来统一新的区块的timestamp
+        if len(blockchain.current_traces) == BLOCKLENGTH:
+            messageToSend['is_current_traces_full'] = True
+            mine(blockchain)
+            blockTimestamp = blockchain.chain[-1]['timestamp']
+            messageToSend['block_timestamp'] = blockTimestamp
+        else:
+            messageToSend['is_current_traces_full'] = False
+        for addrTuple in connectedAddrList:
+            addrTuple[0].sendall(bytes(str(messageToSend), encoding = "utf-8"))
+    response = {'message': f'trace will be added to Block {index}'}
     return response
+'''
+
+
+# 创建交trace请求
+def new_traces(blockchain, connectedAddrList, pseudonym, location, timestamp):
+    # pseudonymList = eval(nameList)
+
+    #创建一个新的交易, 每满BLOCKLENGTH个traces就产生一个块
+    returnResult = blockchain.new_trace(pseudonym, False, location, PRI_KEY_PATH)
+    index = returnResult[0]
+    newTrace = returnResult[1]
+
+    messageToSend = newTrace.dictForm()
+    # 添加操作符, 1为新增trace
+    messageToSend['ope'] = 1
+    # 通过确定块内最后一条trace来统一新的区块的timestamp
+    if len(blockchain.current_traces) == BLOCKLENGTH:
+        messageToSend['is_current_traces_full'] = True
+        mine(blockchain)
+        blockTimestamp = blockchain.chain[-1]['timestamp']
+        messageToSend['block_timestamp'] = blockTimestamp
+    else:
+        messageToSend['is_current_traces_full'] = False
+    if len(connectedAddrList)!= 0:
+        for addrTuple in connectedAddrList:
+            addrTuple[0].sendall(bytes(str(messageToSend), encoding = "utf-8"))
+    response = {'message': f'trace will be added to Block {index}'}
+    return response
+
 
 
 # 获取所有块的信息

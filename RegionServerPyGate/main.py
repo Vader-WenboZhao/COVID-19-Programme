@@ -22,6 +22,9 @@ lora_sock = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 lora_sock.setblocking(False)
 
 localTraces = []
+riskyNames = set()
+# 测试
+riskyNames.add('ABCDEFG')
 
 '''
 wifi part
@@ -29,7 +32,7 @@ wifi part
 # outdoor hotspot
 # PCAddr = ('172.20.10.3', 8081)
 # indoor Wi-Fi
-PCAddr = ('192.168.1.100', 8090)
+PCAddr = ('192.168.1.100', 8091)
 print('\nConnecting to WiFi...',  end='')
 # Connect to a Wifi Network
 wlan = WLAN(mode=WLAN.STA)
@@ -80,9 +83,11 @@ while True:
     try:
         time.sleep(3)
         socketToPC.connect(PCAddr)
+        print("Connect PC successfully")
         break
     except BaseException as be:
         print(be)
+        time.sleep(3)
         continue
 
 def sendToPCPart():
@@ -102,34 +107,45 @@ def sendToPCPart():
             continue
 
 
-_LORA_PKG_FORMAT = "BB%ds"
-_LORA_PKG_ACK_FORMAT = "BBB"
-_LORA_PKG_TIME_ACK_FORMAT = "!BBL"
+def recvFromPCPart():
+    global riskyNames
+    while True:
+        recvTCPData = socketToPC.recv(512)
+        msg = eval(str(recvTCPData, encoding='utf-8'))
+        if isinstance(msg, set):
+            riskyNames = msg
+
+
 
 def recvFromFixedDevice():
     global localTraces
+    global riskyNames
 
     while True:
         recv_pkg = lora_sock.recv(512)
         if (len(recv_pkg) > 2):
             recv_pkg_len = recv_pkg[1]
 
-            device_id, pkg_len, msgJson = struct.unpack(_LORA_PKG_FORMAT % recv_pkg_len, recv_pkg)
+            device_id, pkg_len, msgJson = struct.unpack("BB%ds" % recv_pkg_len, recv_pkg)
             msgStr = msgJson.decode()
             try:
                 msg = eval(msgStr)
+                print(msg)
             except BaseException:
                 continue
 
             if 'timeAsk' in msg.keys() and msg['timeAsk']==True:
-                ack_pkg = struct.pack(_LORA_PKG_TIME_ACK_FORMAT, device_id, 1, time.mktime(rtc.now()))
+                ack_pkg = struct.pack("!BBL", device_id, 1, time.mktime(rtc.now()))
                 lora_sock.send(ack_pkg)
                 continue
             else:
                 # sendMessage = {'traces': localTraces[0], 'sendDevice': 'fixedDevice', 'aim': regionServerNum}
                 if msg['sendDevice'] == 'fixedDevice':
                     localTraces.append(msg['traces'])
-                ack_pkg = struct.pack(_LORA_PKG_ACK_FORMAT, device_id, 1, 200)
+                # ack_pkg = struct.pack(_LORA_PKG_ACK_FORMAT % len(str(riskyNames)), device_id, 1, 200, len(str(riskyNames)), str(riskyNames))
+                riskNamesStr = str(riskyNames)
+                # 在串的前面写入串的长度然后写入串本身
+                ack_pkg = struct.pack("iBB" + str(len(riskNamesStr)) + "s", len(riskNamesStr), device_id, 200, riskNamesStr)
                 lora_sock.send(ack_pkg)
 
             '''
@@ -139,4 +155,5 @@ def recvFromFixedDevice():
 
 
 threadRecvFromFixedDevice = _thread.start_new_thread(recvFromFixedDevice,())
-threadSendToPCPart = _thread.start_new_thread(sendToPCPart,())
+threadSendToPC = _thread.start_new_thread(sendToPCPart,())
+threadRecvFromPC = _thread.start_new_thread(recvFromPCPart,())
