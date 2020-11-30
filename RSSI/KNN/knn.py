@@ -3,8 +3,7 @@
 from numpy import *
 import operator
 
-SF_LIST = [7,12]
-TXP_LIST = [2,14]
+SF_TXP_LIST = [[7,2],[7,14],[12,2],[12,14]]
 
 ROOTPATH = '/Users/zhaowenbo/wilna305/Fang3/RSSI/KNN/data/'
 TESTROOTPATH = '/Users/zhaowenbo/wilna305/Fang3/RSSI/KNN/TestData/'
@@ -53,38 +52,37 @@ def classify(input,dataSet,label,k):
     return classes
 
 def main():
-    for sf in SF_LIST:
-        for txp in TXP_LIST:
-            indoorDataPath = ROOTPATH + 'indoor_sf'+str(sf)+'_txpower'+str(txp)+'_tcenter.txt'
-            outdoorDataPath = ROOTPATH + 'outdoor_sf'+str(sf)+'_txpower'+str(txp)+'_tcenter.txt'
-            data = []
-            labels = []
-            data += readFile(indoorDataPath)[0]
-            labels1 = readFile(indoorDataPath)[1] * [True]
-            data += readFile(outdoorDataPath)[0]
-            labels2 = readFile(outdoorDataPath)[1] * [False]
-            labels = labels1 + labels2
-            dataSet, labelsSet = createDataSet(data, labels)
+    for sftxp in SF_TXP_LIST:
+        indoorDataPath = ROOTPATH + 'indoor_sf'+str(sftxp[0])+'_txpower'+str(sftxp[1])+'_tcenter.txt'
+        outdoorDataPath = ROOTPATH + 'outdoor_sf'+str(sftxp[0])+'_txpower'+str(sftxp[1])+'_tcenter.txt'
+        data = []
+        labels = []
+        data += readFile(indoorDataPath)[0]
+        labels1 = readFile(indoorDataPath)[1] * [True]
+        data += readFile(outdoorDataPath)[0]
+        labels2 = readFile(outdoorDataPath)[1] * [False]
+        labels = labels1 + labels2
+        dataSet, labelsSet = createDataSet(data, labels)
 
-            indoorTestDataPath = TESTROOTPATH + 'Indoor_sf'+str(sf)+'_txp'+str(txp)+'_test.txt'
-            outdoorTestDataPath = TESTROOTPATH + 'Outdoor_sf'+str(sf)+'_txp'+str(txp)+'_test.txt'
-            inputIndoorData = readFile(indoorTestDataPath)[0]
-            inputOutdoorData = readFile(outdoorTestDataPath)[0]
-            denominator = readFile(indoorTestDataPath)[1] + readFile(outdoorTestDataPath)[1]
+        indoorTestDataPath = TESTROOTPATH + 'Indoor_sf'+str(sftxp[0])+'_txp'+str(sftxp[1])+'_test.txt'
+        outdoorTestDataPath = TESTROOTPATH + 'Outdoor_sf'+str(sftxp[0])+'_txp'+str(sftxp[1])+'_test.txt'
+        inputIndoorData = readFile(indoorTestDataPath)[0]
+        inputOutdoorData = readFile(outdoorTestDataPath)[0]
+        denominator = readFile(indoorTestDataPath)[1] + readFile(outdoorTestDataPath)[1]
 
-            count = 0
-            accuracy = 0
+        count = 0
+        accuracy = 0
 
-            for data in inputIndoorData:
-                if classify(data, dataSet, labels, K) == True:
-                    count += 1
+        for data in inputIndoorData:
+            if classify(data, dataSet, labels, K) == True:
+                count += 1
 
-            for data in inputOutdoorData:
-                if classify(data, dataSet, labels, K) == False:
-                    count += 1
+        for data in inputOutdoorData:
+            if classify(data, dataSet, labels, K) == False:
+                count += 1
 
-            accuracy = count/denominator
+        accuracy = count/denominator
 
-            print('sf=' + str(sf) + ', tx_power=' + str(txp) + ': ' + '%.2f' % (100 *accuracy))
+        print('sf=' + str(sftxp[0]) + ', tx_power=' + str(sftxp[1]) + ': ' + '%.2f' % (100 *accuracy))
 
 main()
