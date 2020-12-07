@@ -120,7 +120,6 @@ class HandlerForPyGate(socketserver.BaseRequestHandler):
                 continue
 
 
-
 def blockchainMaintain_thread(blockchain):
     while(True):
         try:
