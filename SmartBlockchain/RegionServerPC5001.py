@@ -12,7 +12,7 @@ PORT = 5001
 
 listenAddrFromPyGate = ('127.0.0.1', 8091)
 
-riskyPseudonymList = set() #改用多区块链!
+riskyPseudonyms = set()
 
 
 class Smart_Blockchain:
@@ -136,7 +136,23 @@ def add_new_trace():
     return "Successfully added new trace", 201
 
 
-def new_trace(name, time, loca):
+@app.route('/riskyNames', methods=['GET'])
+def get_risky_Pseudonymes():
+    global riskyPseudonyms
+
+    response = requests.get(BPSCARRESS + f'risky/names')
+
+    if response.status_code == 200:
+        riskyPseudonymList = response.json()['riskyPseudonyms']
+        riskyPseudonyms = set(riskyPseudonymList)
+    else:
+        return "Error", 400
+
+    return jsonify(list(riskyPseudonyms)), 200
+
+
+
+def newTrace(name, time, loca):
     if not isinstance(name, str) or not isinstance(time, int) or not isinstance(loca, str):
         return 'Wrong data type', 400
 
@@ -150,6 +166,20 @@ def new_trace(name, time, loca):
     return "Successfully added new trace"
 
 
+def renewRiskyPseudonymes():
+    global riskyPseudonyms
+
+    response = requests.get(BPSCARRESS + f'risky/names')
+
+    if response.status_code == 200:
+        riskyPseudonymList = response.json()['riskyPseudonyms']
+        riskyPseudonyms = set(riskyPseudonymList)
+    else:
+        return "Error"
+
+    return "Successfully got risky pseudonyms"
+
+
 def operation_thread():
     global connectedAddrList
     while True:
@@ -159,9 +189,10 @@ def operation_thread():
             if order == "add trace":
                 values = input("Name, time, location in list:")
                 values = eval(values)
-                print(new_trace(values[0], values[1], values[2]))
-            elif order == "risky list":
-                print(riskyPseudonymList)
+                print(newTrace(values[0], values[1], values[2]))
+            elif order == "risky names":
+                response = renewRiskyPseudonymes()
+                print(riskyPseudonyms)
             elif order == "quit":
                 return
             else:
@@ -185,7 +216,7 @@ class HandlerForPyGate(socketserver.BaseRequestHandler):
 
                 self.data = eval(str(self.data, encoding='utf-8'))
                 print(self.data)
-                result = new_trace(self.data['pseudonym'], self.data['timestamp'], self.data['location'])
+                result = newTrace(self.data['pseudonym'], self.data['timestamp'], self.data['location'])
                 print(result[0])
                 print('-'*40)
 
@@ -199,7 +230,7 @@ if __name__ == '__main__':
 
     thread_ope = threading.Thread(target=operation_thread)
     thread_ope.start()
-    
+
     from argparse import ArgumentParser
 
     parser = ArgumentParser()

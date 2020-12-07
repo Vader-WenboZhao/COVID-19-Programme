@@ -118,7 +118,9 @@ app = Flask(__name__)
 
 # Instantiate the Smart_Blockchain
 blockchain = Smart_Blockchain()
+riskyPseudonyms = set()
 
+# 区块链操作
 
 @app.route('/mine', methods=['GET'])
 def mine():
@@ -212,6 +214,53 @@ def smart_chain():
         }
 
     return jsonify(response), 200
+
+
+
+# 风险名单操作
+
+@app.route('/risky/names', methods=['GET'])
+def get_risky():
+    global riskyPseudonyms
+    response = {
+    # set不能Json化
+        'riskyPseudonyms': list(riskyPseudonyms)
+    }
+
+    return jsonify(response), 200
+
+
+@app.route('/risky/add', methods=['POST'])
+def add_risky():
+    global riskyPseudonyms
+
+    values = request.get_json()
+
+    name = values.get('riskyName')
+    if not isinstance(name, str):
+        return "Error: Please supply a valid pseudonym", 400
+
+    riskyPseudonyms.add(name)
+
+    return "Added successfully", 201
+
+
+@app.route('/risky/delete', methods=['POST'])
+def delete_risky():
+    global riskyPseudonyms
+
+    values = request.get_json()
+
+    name = values.get('riskyName')
+    if not isinstance(name, str):
+        return "Error: Please supply a valid pseudonym", 400
+
+    if riskyPseudonyms.__contains__(name):
+        riskyPseudonyms.remove(name)
+        return "Deleted successfully", 201
+    else:
+        return "Deleted successfully", 201
+
 
 
 if __name__ == '__main__':

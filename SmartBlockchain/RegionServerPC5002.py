@@ -1,5 +1,7 @@
 from urllib.parse import urlparse
 
+import socketserver
+import threading
 import requests
 from flask import Flask, jsonify, request
 import json
@@ -7,6 +9,11 @@ import json
 BPSCARRESS = f'http://127.0.0.1:5000/'
 HOST = '0.0.0.0'
 PORT = 5002
+
+listenAddrFromPyGate = ('127.0.0.1', 8091)
+
+riskyPseudonyms = set()
+
 
 class Smart_Blockchain:
     def __init__(self):
@@ -48,7 +55,6 @@ class Smart_Blockchain:
             return True
 
         return False
-
 
 
 # Instantiate the Node
@@ -109,19 +115,18 @@ def smart_chain():
 def add_new_trace():
     values = request.get_json()
 
-    required = ['pseudonym', 'timestamp', 'location', 'amount_send']
+    required = ['pseudonym', 'timestamp', 'location']
     if not all(k in values for k in required):
         return 'Missing values', 400
 
     pseudonym = values.get('pseudonym')
     timestamp = values.get('timestamp')
     location = values.get('location')
-    amount_send = values.get('amount_send')
 
-    if not isinstance(pseudonym, str) or not isinstance(timestamp, int) or not isinstance(location, str) or not isinstance(amount_send, int):
+    if not isinstance(pseudonym, str) or not isinstance(timestamp, int) or not isinstance(location, str):
         return 'Wrong data type', 400
 
-    data = {'pseudonym':pseudonym, 'timestamp':timestamp, 'location':location, 'amount_send':amount_send}
+    data = {'pseudonym':pseudonym, 'timestamp':timestamp, 'location':location}
 
     try:
         requests.post(BPSCARRESS + f'traces/new', json=data)
@@ -131,9 +136,101 @@ def add_new_trace():
     return "Successfully added new trace", 201
 
 
+@app.route('/riskyNames', methods=['GET'])
+def get_risky_Pseudonymes():
+    global riskyPseudonyms
+
+    response = requests.get(BPSCARRESS + f'risky/names')
+
+    if response.status_code == 200:
+        riskyPseudonymList = response.json()['riskyPseudonyms']
+        riskyPseudonyms = set(riskyPseudonymList)
+    else:
+        return "Error", 400
+
+    return jsonify(list(riskyPseudonyms)), 200
+
+
+
+def newTrace(name, time, loca):
+    if not isinstance(name, str) or not isinstance(time, int) or not isinstance(loca, str):
+        return 'Wrong data type', 400
+
+    data = {'pseudonym':name, 'timestamp':time, 'location':loca}
+
+    try:
+        requests.post(BPSCARRESS + f'traces/new', json=data)
+    except BaseException:
+        return "Failed to add new trace"
+
+    return "Successfully added new trace"
+
+
+def renewRiskyPseudonymes():
+    global riskyPseudonyms
+
+    response = requests.get(BPSCARRESS + f'risky/names')
+
+    if response.status_code == 200:
+        riskyPseudonymList = response.json()['riskyPseudonyms']
+        riskyPseudonyms = set(riskyPseudonymList)
+    else:
+        return "Error"
+
+    return "Successfully got risky pseudonyms"
+
+
+def operation_thread():
+    global connectedAddrList
+    while True:
+        try:
+            global ContactTracingBlockchain
+            order = input("Input order: ")
+            if order == "add trace":
+                values = input("Name, time, location in list:")
+                values = eval(values)
+                print(newTrace(values[0], values[1], values[2]))
+            elif order == "risky names":
+                response = renewRiskyPseudonymes()
+                print(riskyPseudonyms)
+            elif order == "quit":
+                return
+            else:
+                print("Valid order")
+                pass
+        except BaseException as be:
+            print(be)
+            continue
+
+
+# 处理PyGate部分发来的数据
+class HandlerForPyGate(socketserver.BaseRequestHandler):
+    def handle(self):
+        while True:
+            print('Connected')
+            while True:
+                self.data = self.request.recv(1024)
+                print('address:', self.client_address)
+                if not self.data:
+                    continue
+
+                self.data = eval(str(self.data, encoding='utf-8'))
+                print(self.data)
+                result = newTrace(self.data['pseudonym'], self.data['timestamp'], self.data['location'])
+                print(result[0])
+                print('-'*40)
+
+                continue
 
 
 if __name__ == '__main__':
+
+    # server = socketserver.ThreadingTCPServer(listenAddrFromPyGate, HandlerForPyGate)   # 多线程交互
+    # server.serve_forever()
+
+    thread_ope = threading.Thread(target=operation_thread)
+    thread_ope.start()
+
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
