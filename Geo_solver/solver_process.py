@@ -1,43 +1,224 @@
+from urllib.parse import urlparse
+
 import socketserver
 import threading
-from BasicBlockchainProcess import *
-from Blockchain import *
-from parameters import *
-import time
+import requests
+from flask import Flask, jsonify, request
+import json
+import socket
 
-# 实例化Blockchain类
-ContactTracingBlockchain = Blockchain()
-NotificationBlockchain = Blockchain()
-# ContactTracingBlockchain.register_node(node_identifier)
+BPSCARRESS = f'http://127.0.0.1:5000/'
+HOST = '0.0.0.0'
+PORT = 8082
 
-connectedAddrList = []
-riskyPseudonyms = set()
+TIMERANGE = 60 # 1 min
 
-
-def notify(addrs, message):
-    if len(addrs)!= 0:
-        # 添加操作符, 2为发布风险用户集合
-        messageToSend = {'riskyPseudonyms': message, 'ope':2}
-        for addrTuple in addrs:
-            addrTuple[0].sendall(bytes(str(messageToSend), encoding = "utf-8"))
+LISTENADDRESS = ('127.0.0.1', 8081)
 
 
-def searchInBlockchain(blockchain, searchTime, searchLocation):
+class Smart_Blockchain:
+    def __init__(self):
+        self.chain = []
+        self.nodes = set()
+
+
+    def register_node(self, address):
+        """
+        Add a new node to the list of nodes
+        :param address: Address of node. Eg. 'http://192.168.0.5:5000'
+        """
+
+        parsed_url = urlparse(address)
+        if parsed_url.netloc:
+            self.nodes.add(parsed_url.netloc)
+        elif parsed_url.path:
+            # Accepts an URL without scheme like '192.168.0.5:5000'.
+            self.nodes.add(parsed_url.path)
+        else:
+            raise ValueError('Invalid URL')
+
+
+    def smart_chain(self):
+        """
+        All nodes can receive the smart_chain
+        """
+
+        schain = None
+        response = requests.get(BPSCARRESS + f'chain')
+
+        if response.status_code == 200:
+            chain = response.json()['chain']
+            schain = chain
+
+        # Replace our chain
+        if schain:
+            self.chain = schain
+            return True
+
+        return False
+
+
+
+# Instantiate the Node
+app = Flask(__name__)
+
+# Instantiate the Smart_Blockchain
+blockchain = Smart_Blockchain()
+
+
+@app.route('/smart/chain', methods=['GET'])
+def smart_chain():
+    replaced = blockchain.smart_chain()
+
+    if replaced:
+        response = {
+            'message': 'Smart chain update by bpsc',
+            'smart chain': blockchain.chain,
+            'length': len(blockchain.chain)
+        }
+    else:
+        response = {
+            'message': 'Unsuccessful: Please try again',
+            'old chain': blockchain.chain,
+            'length': len(blockchain.chain)
+        }
+
+    return jsonify(response), 200
+
+
+
+@app.route('/addName', methods=['POST'])
+def addName():
+    values = request.get_json()
+
+    required = ['pseudonyms']
+    if not all(k in values for k in required):
+        return 'Missing values', 400
+
+    # pseudonyms是字符串列表
+    pseudonyms = values.get('pseudonyms')
+
+    if not isinstance(pseudonyms, list):
+        return "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(pseudonyms)), 400
+
+    for name in pseudonyms:
+        if not isinstance(name, str):
+            return 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name)), 400
+
+    for name in pseudonyms:
+        data = {'riskyName':name}
+        try:
+            response = requests.post(BPSCARRESS + f'risky/add', json=data)
+            if response.status_code == 201:
+                continue
+            else:
+                return "Failed to add risky pseudonym " + name, 400
+        except BaseException as be:
+            print(be)
+            return "Failed to add risky pseudonym " + name, 400
+
+    return "Successfully add all the risky pseudonyms", 200
+
+
+
+@app.route('/removeName', methods=['POST'])
+def removeName():
+    values = request.get_json()
+
+    required = ['pseudonyms']
+    if not all(k in values for k in required):
+        return 'Missing values', 400
+
+    # pseudonyms是字符串列表
+    pseudonyms = values.get('pseudonyms')
+
+    if not isinstance(pseudonyms, list):
+        return "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(pseudonyms)), 400
+
+    for name in pseudonyms:
+        if not isinstance(name, str):
+            return 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name)), 400
+
+    for name in pseudonyms:
+        data = {'riskyName':name}
+        try:
+            response = requests.post(BPSCARRESS + f'risky/delete', json=data)
+            if response.status_code == 201:
+                continue
+            else:
+                return "Failed to add risky pseudonym " + name, 400
+        except BaseException as be:
+            print(be)
+            return "Failed to add risky pseudonym " + name, 400
+
+    return "Successfully remove risky pseudonyms", 200
+
+
+
+def renewChain():
+    blockchain.smart_chain()
+    return True
+
+
+# 根据时间和地点查找风险匿名
+def findRiskyPseudonyms(searchTime, searchLocation):
+    renewChain()
     searchTime = int(searchTime)
     searchResult = set()
     for block in blockchain.chain:
         for trace in block['traces']:
-            trace = eval(trace)
+            # trace = eval(trace)
             if (searchTime - TIMERANGE) <= int(trace['timestamp']) <= (searchTime + TIMERANGE) and trace['location'] == searchLocation:
                 searchResult.add(trace['pseudonym'])
+    # searchResult是一个字符串集合
     return searchResult
 
 
-def findRiskyPseudonyms(blockchain, searchTime, searchLocation):
-    # 结果是个集合
-    riskyPseudonyms = searchInBlockchain(blockchain, searchTime, searchLocation)
-    return riskyPseudonyms
+def addPseudonyms(nameList):
+    if not isinstance(nameList, list):
+        return "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList)), 400
 
+    for name in nameList:
+        if not isinstance(name, str):
+            return 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name)), 400
+
+    for name in nameList:
+        data = {'riskyName':name}
+        try:
+            response = requests.post(BPSCARRESS + f'risky/add', json=data)
+            if response.status_code == 201:
+                continue
+            else:
+                return False, "Failed to add risky pseudonym " + name
+        except BaseException as be:
+            print(be)
+            return False, "Failed to add risky pseudonym " + name
+
+    return True, "Successfully add all the risky pseudonyms"
+
+
+
+def removePseudonyms(nameList):
+    if not isinstance(nameList, list):
+        return "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList)), 400
+
+    for name in nameList:
+        if not isinstance(name, str):
+            return 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name)), 400
+
+    for name in nameList:
+        data = {'riskyName':name}
+        try:
+            response = requests.post(BPSCARRESS + f'risky/delete', json=data)
+            if response.status_code == 201:
+                continue
+            else:
+                return False, "Failed to add risky pseudonym " + name
+        except BaseException as be:
+            print(be)
+            return False, "Failed to add risky pseudonym " + name
+
+    return True, "Successfully remove risky pseudonyms"
 
 
 
@@ -47,24 +228,12 @@ def operation_thread():
         try:
             global ContactTracingBlockchain
             order = input("Input order: ")
-            if order == "connect":
-                connectedAddrList = connect()
-            elif order == "chain":
-                print(full_chain(ContactTracingBlockchain))
-            elif order == "notify":
-                searchT = input("Search time: ")
-                searchL = input("search location: ")
-                print(findRiskyPseudonyms(ContactTracingBlockchain, searchT, searchL))
-            elif order == "quit":
-                quit(connectedAddrList)
-                if len(connectedAddrList) != 0:
-                    for addrTuple in connectedAddrList:
-                        addrTuple[0].close()
-                print("Connection breaks")
-                return
-            else:
-                print("Valid order")
+            if order == "add names":
                 pass
+            elif order == "remove names":
+                pass
+            else:
+                print("Invalid order!")
         except BaseException as be:
             print(be)
             continue
@@ -72,70 +241,61 @@ def operation_thread():
 
 class Handler(socketserver.BaseRequestHandler):
     def handle(self):
-        global riskyPseudonyms
         while True:
             print('waiting for connect')
-            while True:
-                self.data = self.request.recv(1024) # 接收
-                print('address:', self.client_address)
-                # self.request.send(self.data.upper()) # 发送
-                if not self.data:
-                    continue
-                if self.data== b'quit':
-                    print('abort connection....')
-                    # client.send(b'close')
-                    client.close()
+            self.data = self.request.recv(1024) # 接收
+            print('address:', self.client_address)
+            # self.request.send(self.data.upper()) # 发送
+            if not self.data:
+                break
+            if self.data== b'quit':
+                print('abort connection....')
+                # client.send(b'close')
+                break
+            # 这里signature还是bytes类型
+            self.data = eval(str(self.data, encoding='utf-8'))
+            # 操作符为3说明要根据时间地址查询并添加风险用户
+            if self.data['ope'] == 3:
+                # [(t,l),(t,l),(t,l),...]
+                timeLocationList = self.data['timeLocationList']
+                if len(timeLocationList) == 0:
+                    print("No trace data")
                     break
-                # 这里signature还是bytes类型
-                self.data = eval(str(self.data, encoding='utf-8'))
-                # 操作符为1说明新的trace
-                if self.data['ope'] == 1:
-                    newTrace = Trace(self.data['pseudonym'], self.data['location'], self.data['timestamp'], self.data['signature'])
-                    if newTrace.verify(PUB_KEY_PATH):
-                        ContactTracingBlockchain.add_trace(newTrace)
-                        if self.data['is_current_traces_full'] == True:
-                            newBlockTimestamp = self.data['block_timestamp']
-                            mine(ContactTracingBlockchain, newBlockTimestamp)
-                            if ContactTracingBlockchain.valid_chain(ContactTracingBlockchain.chain) == False:
-                                print("Invalid block!")
-                                ContactTracingBlockchain.chain.pop()
-                    else:
-                        print("New trace is invalid!")
-                # 操作符为3说明要根据时间地址查询风险用户
-                elif self.data['ope'] == 3:
-                    # [(t,l),(t,l),(t,l),...]
-                    timeLocationList = self.data['timeLocationList']
-                    # riskyPseudonyms = set()
-                    for TLtuple in timeLocationList:
-                        riskyPseudonyms = riskyPseudonyms | findRiskyPseudonyms(ContactTracingBlockchain, TLtuple[0], TLtuple[1])
-                    notify(connectedAddrList, riskyPseudonyms)
-                # 操作符为4说明要清除风险用户
-                elif self.data['ope'] == 4:
-                    # [(n),(n),(n),...]
-                    riskyPseudonymListToDelete = self.data['riskyPseudonymList']
-                    riskyPseudonymSetToDelete = set(riskyPseudonymListToDelete)
-                    riskyPseudonyms = riskyPseudonyms - riskyPseudonymSetToDelete
-                    notify(connectedAddrList, riskyPseudonyms)
-                print('-'*40)
+                for TLtuple in timeLocationList:
+                    # riskyPseudonyms是个集合
+                    riskyPseudonyms = findRiskyPseudonyms(TLtuple[0], TLtuple[1])
+                    riskyPseudonyms = list(riskyPseudonyms)
+                result = addPseudonyms(riskyPseudonyms)
+                print(result[1])
+                break
+            # 操作符为4说明要清除风险用户
+            elif self.data['ope'] == 4:
+                # [(n),(n),(n),...]
+                riskyPseudonymListToDelete = self.data['riskyPseudonymList']
+                result = removePseudonyms(riskyPseudonymListToDelete)
+                print(result[1])
+                break
+            else:
+                break
+            print('-'*40)
 
                 # print("%s say:%s"%(addr,data))
                 # client.sendall(bytes(word, encoding = "utf-8"))
 
 
-def blockchainMaintain_thread(blockchain):
-    while(True):
-        try:
-            blockchain.deleteOldBlock()
-            # 每10分钟维护一次
-            time.sleep(600)
-        except BaseException as be:
-            print(be)
-            continue
+if __name__ == '__main__':
 
+    server = socketserver.ThreadingTCPServer(LISTENADDRESS, Handler)
+    server.serve_forever()
 
-thread_maintain = threading.Thread(target=blockchainMaintain_thread, args=(ContactTracingBlockchain,))
-thread_maintain.start()
-thread_ope = threading.Thread(target=operation_thread)
-thread_ope.start()
-server = socketserver.ThreadingTCPServer(listenAddr, Handler)   # 多线程交互
-server.serve_forever()
+    thread_ope = threading.Thread(target=operation_thread)
+    thread_ope.start()
+
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument('-p', '--port', default=PORT, type=int, help='port to listen on')
+    args = parser.parse_args()
+    port = args.port
+
+    app.run(host=HOST, port=port)

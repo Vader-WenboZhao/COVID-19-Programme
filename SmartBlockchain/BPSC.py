@@ -118,7 +118,9 @@ app = Flask(__name__)
 
 # Instantiate the Smart_Blockchain
 blockchain = Smart_Blockchain()
-riskyPseudonyms = set()
+# riskyPseudonyms = set()
+# 测试
+riskyPseudonyms = set(['HanYe', 'HanBin', 'YuGuangqian'])
 
 # 区块链操作
 

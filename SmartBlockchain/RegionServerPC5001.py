@@ -190,8 +190,11 @@ def operation_thread():
                 values = input("Name, time, location in list:")
                 values = eval(values)
                 print(newTrace(values[0], values[1], values[2]))
+            elif order == "chain":
+                blockchain.smart_chain()
+                print(blockchain.chain)
             elif order == "risky names":
-                response = renewRiskyPseudonymes()
+                renewRiskyPseudonymes()
                 print(riskyPseudonyms)
             elif order == "quit":
                 return
