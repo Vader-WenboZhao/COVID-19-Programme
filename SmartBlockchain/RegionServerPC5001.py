@@ -5,6 +5,7 @@ import threading
 import requests
 from flask import Flask, jsonify, request
 import json
+import time
 
 BPSCARRESS = f'http://127.0.0.1:5000/'
 HOST = '0.0.0.0'
@@ -205,6 +206,11 @@ def operation_thread():
             print(be)
             continue
 
+def renewChain():
+    while True:
+        blockchain.smart_chain()
+        time.sleep(1)
+
 
 # 处理PyGate部分发来的数据
 class HandlerForPyGate(socketserver.BaseRequestHandler):
@@ -233,6 +239,9 @@ if __name__ == '__main__':
 
     thread_ope = threading.Thread(target=operation_thread)
     thread_ope.start()
+
+    thread_renewChain = threading.Thread(target=renewChain)
+    thread_renewChain.start()
 
     from argparse import ArgumentParser
 

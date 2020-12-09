@@ -5,6 +5,7 @@ import threading
 import requests
 from flask import Flask, jsonify, request
 import json
+import time
 
 BPSCARRESS = f'http://127.0.0.1:5000/'
 HOST = '0.0.0.0'
@@ -190,8 +191,11 @@ def operation_thread():
                 values = input("Name, time, location in list:")
                 values = eval(values)
                 print(newTrace(values[0], values[1], values[2]))
+            elif order == "chain":
+                blockchain.smart_chain()
+                print(blockchain.chain)
             elif order == "risky names":
-                response = renewRiskyPseudonymes()
+                renewRiskyPseudonymes()
                 print(riskyPseudonyms)
             elif order == "quit":
                 return
@@ -201,6 +205,11 @@ def operation_thread():
         except BaseException as be:
             print(be)
             continue
+
+def renewChain():
+    while True:
+        blockchain.smart_chain()
+        time.sleep(1)
 
 
 # 处理PyGate部分发来的数据
@@ -230,6 +239,9 @@ if __name__ == '__main__':
 
     thread_ope = threading.Thread(target=operation_thread)
     thread_ope.start()
+
+    thread_renewChain = threading.Thread(target=renewChain)
+    thread_renewChain.start()
 
     from argparse import ArgumentParser
 
