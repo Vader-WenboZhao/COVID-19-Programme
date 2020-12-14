@@ -25,7 +25,7 @@ fixed device 从 mobile device 接收到只包含假名的记录, 向 region ser
 模式切换后第一件事就是时间校对, 其他什么都不做
 '''
 
-riskyPseudonymSet = set({'8iw3bNKJj0eu6dxc', 't5ctaNlWPq4BEGDF', 'jwYQInToUKFCFGmy'})
+riskyPseudonymSet = set()
 localTraces = []
 # alarm计时
 seconds = 0

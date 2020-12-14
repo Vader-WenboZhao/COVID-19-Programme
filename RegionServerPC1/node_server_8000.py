@@ -1,6 +1,8 @@
 from urllib.parse import urlparse
 from hashlib import sha256
 from flask import Flask, jsonify, request
+from multiprocessing import  Process # 多进程
+import getIp
 
 import socketserver
 import threading
@@ -8,26 +10,31 @@ import requests
 import json
 import socket
 import time
-import getIp
 
 '''
 可以修改的地方:
 1.PORT
 2.registerAddress
+3.listenAddrFromPyGate的port
 '''
 
-MyIP = getIp.get_host_ip()
-HOST = str(MyIP)
-PORT = 5010
+HOST = str(getIp.get_host_ip())
+PORT = 8000
+print("IP Address:", HOST)
 
 RISKYADRESS = f'http://121.4.89.43:5000/'
-TIMERANGE = 60 # 1min
-
+# 默认的注册节点
 registerAddress = "http://192.168.1.105:8000"
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 
+socketPyGate = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+socketPyGate.setblocking(True)
+listenAddrFromPyGate = (HOST, 3000)
+socketPyGate.bind(listenAddrFromPyGate)
 
+riskyPseudonyms = set()
 
+latestMessage = None
 
 class Block:
     def __init__(self, index, traces, timestamp, previous_hash, nonce=0):
@@ -158,7 +165,6 @@ class Blockchain:
         return True
 
 
-
 app = Flask(__name__)
 
 # the node's copy of blockchain
@@ -177,6 +183,9 @@ blockchain.create_genesis_block()
 # /add_block, POST, json, ["index", "traces", "timestamp", "previous_hash", "nonce"]
 # /pending_tx
 '''
+
+
+
 
 # the address to other participating members of the network
 peers = set()
@@ -372,123 +381,20 @@ def announce_new_block(block):
 
 
 
-def addPseudonyms(nameList):
-    if not isinstance(nameList, list):
-        return False, "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList))
 
-    for name in nameList:
-        if not isinstance(name, str):
-            return False, 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name))
+def renewRiskyPseudonymes():
+    global RISKYADRESS
+    global riskyPseudonyms
 
-    for name in nameList:
-        data = {'riskyName':name}
-        try:
-            response = requests.post(RISKYADRESS + f'risky/add', json=data)
-            if response.status_code == 201:
-                continue
-            else:
-                return False, "Failed to add risky pseudonym " + name
-        except BaseException as be:
-            print(be)
-            return False, "Failed to add risky pseudonym " + name
+    response = requests.get(RISKYADRESS + f'risky/names')
 
-    return True, "Successfully add all the risky pseudonyms"
+    if response.status_code == 200:
+        riskyPseudonymList = response.json()['riskyPseudonyms']
+        riskyPseudonyms = set(riskyPseudonymList)
+    else:
+        return False, "Error in renewRiskyPseudonymes()"
 
-
-
-def removePseudonyms(nameList):
-    if not isinstance(nameList, list):
-        return False, "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList))
-
-    for name in nameList:
-        if not isinstance(name, str):
-            return False, 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name))
-
-    for name in nameList:
-        data = {'riskyName':name}
-        try:
-            response = requests.post(RISKYADRESS + f'risky/delete', json=data)
-            if response.status_code == 201:
-                continue
-            else:
-                return False, "Failed to add risky pseudonym " + name
-        except BaseException as be:
-            print(be)
-            return False, "Failed to add risky pseudonym " + name
-
-    return True, "Successfully remove risky pseudonyms"
-
-
-
-# 返回多个患者的多个踪迹的(时间-地点)元组
-def findPatientTimeLocation(patientPseudonymList):
-    global blockchain
-    # patientPseudonymList是字符串列表[n, n, n, ...]
-    for name in patientPseudonymList:
-        if not isinstance(name, str):
-            print("Error: invalid data type!")
-            return False
-        continue
-    result = []
-    # print("patientPseudonymList:", patientPseudonymList)
-    for blk in blockchain.chain:
-        # 没有任何trace
-        if len(blockchain.chain) == 1:
-            return []
-        for trace in blk.traces:
-            # trace = eval(trace)
-            if trace['pseudonym'] in patientPseudonymList:
-                # 元组形式
-                result.append((trace['traceTime'], trace['location']))
-    # 结果形式: [(t,l), (t,l), (t,l), ...]
-    return result
-
-
-
-# 根据时间和地点查找风险匿名
-def findRiskyPseudonyms(searchTime, searchLocation):
-    global blockchain
-
-    searchTime = int(searchTime)
-    searchResult = set()
-    for block in blockchain.chain:
-        for trace in block.traces:
-            # trace = eval(trace)
-            if (searchTime - TIMERANGE) <= int(trace['traceTime']) <= (searchTime + TIMERANGE) and trace['location'] == searchLocation:
-                searchResult.add(trace['pseudonym'])
-    # searchResult是一个字符串集合
-    return searchResult
-
-
-# 操作 findPatientTimeLocation, findRiskyPseudonyms, addPseudonyms
-def addRiskyPseudonyms(patientPseudonymList):
-    global blockchain
-    # patientTimeLocationTuples形式: [(t,l), (t,l), (t,l), ...]
-    patientTimeLocationTuples = findPatientTimeLocation(patientPseudonymList)
-
-    # 这些患者没有轨迹
-    if len(patientTimeLocationTuples) == 0:
-        return addPseudonyms(patientPseudonymList)
-
-    for TLtuple in patientTimeLocationTuples:
-        # riskyPseudonyms是个集合
-        riskyPseudonyms = findRiskyPseudonyms(TLtuple[0], TLtuple[1])
-        riskyPseudonyms = list(riskyPseudonyms)
-    # return (Bool, str)
-    return addPseudonyms(riskyPseudonyms)
-
-
-
-# 操作 removePseudonyms
-def deleteRiskyPseudonym(riskyPseudonymList):
-    # riskyPseudonymList是个字符串列表
-    for name in riskyPseudonymList:
-        if not isinstance(name, str):
-            print("Error: invalid data type!")
-            return False
-        continue
-    # return (Bool, str)
-    return removePseudonyms(riskyPseudonymList)
+    return True, "Successfully get risky pseudonyms"
 
 
 def printChain():
@@ -497,6 +403,21 @@ def printChain():
         chain_data.append(block.__dict__)
     print(chain_data)
     return
+
+
+def newTrace(name, time, loca):
+    if not isinstance(name, str) or not isinstance(time, int) or not isinstance(loca, str):
+        return False, 'Wrong data type'
+
+    data = {'pseudonym':name, 'traceTime':time, 'location':loca}
+
+    try:
+        blockchain.add_new_trace(data)
+        mine_unconfirmed_traces()
+    except BaseException:
+        return False, "newTrace() failed to add new trace"
+
+    return True, "Successfully added new trace"
 
 
 def register():
@@ -511,44 +432,95 @@ def register():
 
 
 
-# register node 和 quit 还没写
 def operation_thread():
+    global connectedAddrList
     while True:
         try:
-            global blockchain
-            print("Orders: register, peers, add, delete, chain, quit")
+            global ContactTracingBlockchain
+            print("Orders: register, peers, chain, trace, risky, quit")
             order = input("Input order: ")
-            if order == "register":
+            if order == "trace":
+                values = input("Name, time, location in list:")
+                values = eval(values)
+                print(newTrace(values[0], values[1], values[2])[1])
+            elif order == "chain":
+                printChain()
+            elif order == "risky":
+                renewRiskyPseudonymes()
+                print(riskyPseudonyms)
+            elif order == "register":
                 print(register()[1])
             elif order == "peers":
                 print(peers)
-            elif order == "add":
-                # 输入list
-                patientPseudonymList = input("patient's pseudonyms, in the form of list: ")
-                patientPseudonymList = eval(patientPseudonymList)
-                print(addRiskyPseudonyms(patientPseudonymList)[1])
-            elif order == "delete":
-                # 输入list
-                riskyPseudonymListToDelete = input("risky pseudonyms to delete, in the form of list: ")
-                riskyPseudonymListToDelete = eval(riskyPseudonymListToDelete)
-                print(deleteRiskyPseudonym(riskyPseudonymListToDelete)[1])
-            elif order == "chain":
-                printChain()
             elif order == "quit":
-                pass
+                return
             else:
-                print("Invalid order")
+                print("Valid order")
+                pass
         except BaseException as be:
             print(be)
             continue
+
+
+'''
+# 处理PyGate部分发来的数据
+class HandlerForPyGate(socketserver.BaseRequestHandler):
+    def handle(self):
+        while True:
+            print('Connected')
+            while True:
+                self.data = self.request.recv(1024)
+                print('address:', self.client_address)
+                if not self.data:
+                    continue
+
+                self.data = eval(str(self.data, encoding='utf-8'))
+                print(self.data)
+                result = newTrace(self.data['pseudonym'], self.data['timestamp'], self.data['location'])
+                print(result[0])
+                print('-'*40)
+
+                continue
+'''
+
+
+def recvFromPyGatePart():
+    global latestMessage
+    socketPyGate.listen(5)
+    connection, addr = socketPyGate.accept()     # 建立客户端连接
+    print("Connected successfully, PyGate part's address:", addr)
+    connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
+    while True:
+        data = connection.recv(1024)
+        if data == latestMessage:
+            continue
+        else:
+            latestMessage = data
+        # if not self.data:
+        #     continue
+        data = eval(str(data, encoding='utf-8'))
+        print("receive from fixed devices:", data)
+        result = newTrace(data['pseudonym'], data['timestamp'], data['location'])
+        print(result[0])
+        print('-'*40)
+        renewRiskyPseudonymes()
+        connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
+        continue
+    connection.close()
+
 
 
 
 
 if __name__ == '__main__':
 
+    renewRiskyPseudonymes()
+
     thread_ope = threading.Thread(target=operation_thread)
     thread_ope.start()
+
+    thread_pygate = threading.Thread(target=recvFromPyGatePart)
+    thread_pygate.start()
 
     from argparse import ArgumentParser
 
@@ -558,3 +530,8 @@ if __name__ == '__main__':
     port = args.port
 
     app.run(host=HOST, port=port)
+
+    '''
+    server = socketserver.ThreadingTCPServer(listenAddrFromPyGate, HandlerForPyGate)   # 多线程交互
+    server.serve_forever()
+    '''
