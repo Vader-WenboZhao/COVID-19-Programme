@@ -26,7 +26,7 @@ TIMERANGE = 60 # 1min
 registerAddress = "http://192.168.1.105:8000"
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 
-
+riskyPseudonyms = set()
 
 
 class Block:
@@ -511,12 +511,28 @@ def register():
 
 
 
+def renewRiskyPseudonymes():
+    global RISKYADRESS
+    global riskyPseudonyms
+
+    response = requests.get(RISKYADRESS + f'risky/names')
+
+    if response.status_code == 200:
+        riskyPseudonymList = response.json()['riskyPseudonyms']
+        riskyPseudonyms = set(riskyPseudonymList)
+    else:
+        return False, "Error in renewRiskyPseudonymes()"
+
+    return True, "Successfully get risky pseudonyms"
+
+
 # register node 和 quit 还没写
 def operation_thread():
     while True:
         try:
             global blockchain
-            print("Orders: register, peers, add, delete, chain, quit")
+            renewRiskyPseudonymes()
+            print("Orders: register, peers, risky, add, delete, chain, quit")
             order = input("Input order: ")
             if order == "register":
                 print(register()[1])
@@ -534,6 +550,8 @@ def operation_thread():
                 print(deleteRiskyPseudonym(riskyPseudonymListToDelete)[1])
             elif order == "chain":
                 printChain()
+            elif order == "risky":
+                print(riskyPseudonyms)
             elif order == "quit":
                 pass
             else:

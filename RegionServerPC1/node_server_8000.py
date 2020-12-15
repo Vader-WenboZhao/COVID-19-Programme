@@ -10,6 +10,7 @@ import requests
 import json
 import socket
 import time
+import sys
 
 '''
 可以修改的地方:
@@ -397,12 +398,11 @@ def renewRiskyPseudonymes():
     return True, "Successfully get risky pseudonyms"
 
 
-def printChain():
+def chainData():
     chain_data = []
     for block in blockchain.chain:
         chain_data.append(block.__dict__)
-    print(chain_data)
-    return
+    return chain_data
 
 
 def newTrace(name, time, loca):
@@ -438,13 +438,13 @@ def operation_thread():
         try:
             global ContactTracingBlockchain
             print("Orders: register, peers, chain, trace, risky, quit")
-            order = input("Input order: ")
+            order = input("Input order: \n")
             if order == "trace":
                 values = input("Name, time, location in list:")
                 values = eval(values)
                 print(newTrace(values[0], values[1], values[2])[1])
             elif order == "chain":
-                printChain()
+                print(chainData())
             elif order == "risky":
                 renewRiskyPseudonymes()
                 print(riskyPseudonyms)
@@ -460,28 +460,6 @@ def operation_thread():
         except BaseException as be:
             print(be)
             continue
-
-
-'''
-# 处理PyGate部分发来的数据
-class HandlerForPyGate(socketserver.BaseRequestHandler):
-    def handle(self):
-        while True:
-            print('Connected')
-            while True:
-                self.data = self.request.recv(1024)
-                print('address:', self.client_address)
-                if not self.data:
-                    continue
-
-                self.data = eval(str(self.data, encoding='utf-8'))
-                print(self.data)
-                result = newTrace(self.data['pseudonym'], self.data['timestamp'], self.data['location'])
-                print(result[0])
-                print('-'*40)
-
-                continue
-'''
 
 
 def recvFromPyGatePart():
@@ -509,6 +487,22 @@ def recvFromPyGatePart():
     connection.close()
 
 
+def autoSave():
+    global blockchain
+    workPath = sys.path[0]
+    print(workPath)
+    while True:
+        try:
+            f = open(workPath + '/blockchain.txt', 'w')
+            f.write(str(chainData()))
+            f.close()
+            # 每分钟记录一次
+            time.sleep(60)
+        except BaseException as be:
+            print(be, "in autoSave function")
+
+
+
 
 
 
@@ -516,11 +510,15 @@ if __name__ == '__main__':
 
     renewRiskyPseudonymes()
 
-    thread_ope = threading.Thread(target=operation_thread)
-    thread_ope.start()
+    thread_autosave = threading.Thread(target=autoSave)
+    thread_autosave.start()
 
     thread_pygate = threading.Thread(target=recvFromPyGatePart)
     thread_pygate.start()
+
+    thread_ope = threading.Thread(target=operation_thread)
+    thread_ope.start()
+
 
     from argparse import ArgumentParser
 

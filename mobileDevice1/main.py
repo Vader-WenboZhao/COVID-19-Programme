@@ -20,25 +20,28 @@ pycom.heartbeat(False)
 # pseudonym: {'name':'...', 'timestamp': ...}
 riskyNames = []
 usedNames = []
+
+# 发送一次匿名信息之后的休眠时常
+sleepTimeInterval = 10
+# 检查当前匿名已使用时长的间隔时间
+checkTimeInterval = 10
+# 更换匿名的周期
+changeNameInterval = 30
+# 匿名长度
+nameLength = 16
+# 健康状态指示灯闪烁间隔时间
+displayInterval = 2
 # 最新的更新密钥的时间
 latestUpdateTime = None
-PUBLICKEY = None
+# 匿名信息的存储时长(14天)
+outdateTime = 1209600
+
+
 H = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 # 现在的假名
 presentPseudonym = None
-# 重发信息标记
-# RESENDSYMBOL = True
-# 最近发送的消息编号
-# latestMessageNumber = 0
-RISKYLEVEL = 0 # 0:无风险(绿); 1:有风险(黄); 2:确诊(红);
+riskyLevel = 0 # 0:无风险(绿); 1:有风险(黄); 2:确诊(红);
 LEVELCOLOR = {0: 0x000f00, 1: 0x0f0f00, 2: 0x0f0000}
-
-
-'''
-with open('lib/public.pem') as f:
-    PUBLICKEY = f.read()
-    f.close()
-'''
 
 
 # LED灯闪烁
@@ -50,19 +53,23 @@ def blink(num = 3, period = .5, color = 0):
         pycom.rgbled(0)
 
 
-def displayRiskyLevel():
+def displayriskyLevel():
     global levelColor
+    global displayInterval
+
     while True:
-        blink(color = LEVELCOLOR[RISKYLEVEL])
-        time.sleep(2)
+        blink(color = LEVELCOLOR[riskyLevel])
+        time.sleep(displayInterval)
 
 
 # 删除过期(14days)的假名
 def deleteOldNames(nameList):
+    global outdateTime
+
     if len(nameList) == 0:
         return
     while True:
-        if time.time() - nameList[0]['timestamp'] >= 1209600:
+        if time.time() - nameList[0]['timestamp'] >= outdateTime:
             nameList.remove(nameList[0])
         else:
             break
@@ -90,12 +97,6 @@ def savePseudonym(newName):
     f.close()
 
 
-'''
-# 随机数加密
-def generatePseudonym():
-    return crypto.rsa_encrypt(str(int(myrandom.RandomRange(100000, 999999))), PUBLICKEY)
-'''
-
 
 def ranstr(num):
     salt = ''
@@ -106,7 +107,9 @@ def ranstr(num):
 
 # 产生假名
 def generatePseudonym():
-    return ranstr(16)
+    global nameLength
+
+    return ranstr(nameLength)
 
 
 lora = LoRa(mode=LoRa.LORA, region=LoRaBand, sf=7)
@@ -119,37 +122,22 @@ socketFromFixedDevice = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketFromFixedDevice.setblocking(True)
 
 
-'''
-# 真实代码
-def updatePseudonym():
-    global presentPseudonym
-    global latestUpdateTime
-    presentPseudonym = generatePseudonym()
-    latestUpdateTime = time.time()
-    savePseudonym(presentPseudonym)
-    while True:
-        # 每个小时检查一次
-        time.sleep(3600)
-        # 每24h更新一次假名
-        if time.time() - latestUpdateTime >= 86400:
-            presentPseudonym = generatePseudonym()
-            latestUpdateTime = time.time()
-            savePseudonym(presentPseudonym)
-'''
-
 
 '''测试代码'''
 def updatePseudonym():
     global presentPseudonym
     global latestUpdateTime
+    global checkTimeInterval
+    global changeNameInterval
+
     presentPseudonym = generatePseudonym()
     latestUpdateTime = time.time()
     savePseudonym(presentPseudonym)
     while True:
         # 每个小时检查一次
-        time.sleep(5)
+        time.sleep(checkTimeInterval)
         # 每24h更新一次假名
-        if time.time() - latestUpdateTime >= 30:
+        if time.time() - latestUpdateTime >= changeNameInterval:
             presentPseudonym = generatePseudonym()
             latestUpdateTime = time.time()
             savePseudonym(presentPseudonym)
@@ -158,12 +146,14 @@ def updatePseudonym():
 def matchRiskyNames():
     global riskyNames
     global usedNames
+    global riskyLevel
+
     if len(riskyNames) == 0:
         return
     for rName in riskyNames:
         for uNameDict in usedNames:
             if rName == uNameDict['name']:
-                RISKYLEVEL = 1
+                riskyLevel = 1
             else:
                 continue
 
@@ -172,6 +162,8 @@ def matchRiskyNames():
 def receiver():
     global socketFromFixedDevice
     global riskyNames
+    global sleepTimeInterval
+    global presentPseudonym
 
     while True:
         try:
@@ -181,21 +173,20 @@ def receiver():
                 if receivedMessage['wake']:
                     # print("Waking up ...")
                     riskyNames = receivedMessage['riskyNames'] # 只包含名字的列表
-                    print(riskyNames)
+                    print(riskyNames, time.time())
                     messageToSend = {'name': presentPseudonym, 'sendDevice': 'mobileDevice'}
                     messageToSendJson = json.dumps(messageToSend)
                     socketToFixedDevice.send(messageToSendJson)
+                    print("sent peudonym:", presentPseudonym)
                     matchRiskyNames()
 
-                    '''# 真实代码每发送一次休息5分钟, 下一次唤醒信息也得5分钟后到达
-                    time.sleep(300)'''
                     # 测试代码
-                    time.sleep(10)
+                    time.sleep(sleepTimeInterval)
 
         except Exception as e:
             # print("Error in receive")
             # print(e)
-            time.sleep(10)
+            time.sleep(sleepTimeInterval)
             continue
 
 
@@ -213,4 +204,4 @@ def printPseudonyms():
 cleanPseudonyms()
 pseudonymThread = _thread.start_new_thread(updatePseudonym, ())
 receiverThread = _thread.start_new_thread(receiver, ())
-displayColorThread = _thread.start_new_thread(displayRiskyLevel, ())
+displayColorThread = _thread.start_new_thread(displayriskyLevel, ())

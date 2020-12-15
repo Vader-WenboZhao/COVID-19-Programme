@@ -20,19 +20,14 @@ LoRaBand = LoRa.EU868
 # 自己的编号大小为 1 byte
 DEVICE_ID = 0x01
 
-'''
-fixed device 从 mobile device 接收到只包含假名的记录, 向 region server 发出只包含假名、地点的记录
-模式切换后第一件事就是时间校对, 其他什么都不做
-'''
 
 riskyPseudonymSet = set()
 localTraces = []
-# alarm计时
-seconds = 0
-# 等待时间(s)
-WAITINGTIME = 5
-# 正在等待的来自地区服务器的ACK的号
-WaitingNum = 0
+
+# 未收到ACK重复发送trace时间间隔
+resendTraceInterval = 1
+# 发送唤醒信息的时间间隔, 应小于移动设备的休眠时长
+wakeUpTimeInterval = 4
 # 是否收到地区服务器的ACK
 HasReceived = False
 # 发送给地区服务器的两种情况
@@ -43,6 +38,8 @@ timeHasReceived = False
 timeDifference = 0
 # 是否收需要等待ACK
 waiting_ack = True
+
+
 
 # Fixed_device产生的Trace不带有time
 def createTrace(pseudonym):
@@ -58,7 +55,6 @@ def createTrace(pseudonym):
 # lora = LoRa(mode=LoRa.LORA, tx_iq=True, region=LoRaBand, sf=7)
 lora = LoRa(mode=LoRa.LORA, region=LoRaBand, sf=7)
 
-
 socketToMobileDevice = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketToMobileDevice.setblocking(False)
 socketToRegionServer = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
@@ -73,11 +69,11 @@ def sendToRegionServer():
     global riskyPseudonymSet
     global socketToRegionServer
     global socketReceive
-    global WaitingNum
     global HasReceived
     global timeHasReceived
     global case
     global timeDifference
+    global resendTraceInterval
 
     # 时间校对, 误差为秒级
     # timeMessage = {'sendDevice': 'fixedDevice', 'aim': regionServerNum, 'timeAsk': True}
@@ -89,14 +85,11 @@ def sendToRegionServer():
     socketToRegionServer.send(pkgTime)
 
     waiting_ack = True
-    while True:
-        time.sleep(1)
-        if timeHasReceived == True:
-            break
-        socketToRegionServer.send(pkgTime)
-        # print(pkgTime)
-        continue
 
+    while not timeHasReceived:
+        socketToRegionServer.send(pkgTime)
+        time.sleep(1)
+        continue
 
     while True:
         if len(localTraces)>=1:
@@ -114,7 +107,7 @@ def sendToRegionServer():
 
         waiting_ack = True
         while True:
-            time.sleep(1)
+            time.sleep(resendTraceInterval)
             if waiting_ack == False:
                 localTraces.remove(localTraces[0])
                 break
@@ -150,7 +143,7 @@ def receive():
         if (len(recvMessage) > 0):
             try:
                 message = json.loads(recvMessage)
-                print(message)
+                print(message, str(time.time()+timeDifference))
                 if message['sendDevice'] == "mobileDevice":
                     newTrace = createTrace(message['name'])
                     continue
@@ -168,7 +161,7 @@ def receive():
             if (device_id == DEVICE_ID):
                 if (ack == 200):
                     waiting_ack = False
-                    print("ACK", riskyPseudonymSet)
+                    print("ACK", riskyPseudonymSet, str(time.time()+timeDifference))
                 else:
                     waiting_ack = False
                     print("Message Failed")
@@ -176,15 +169,15 @@ def receive():
 
 
 def wakeup():
+    global wakeUpTimeInterval
+
     while True:
         # 集合类型放进JSON报错, riskyPseudonymSet转化为list类型
         wakeMessage = {'wake': True, 'riskyNames': list(riskyPseudonymSet), 'sendDevice': 'fixedDevice'}
         wakeMessageJson = json.dumps(wakeMessage)
         socketToMobileDevice.send(wakeMessageJson)
-        '''# 正确代码, 每5分钟广播一次唤醒信息
-        time.sleep(300)'''
         # 测试代码
-        time.sleep(20)
+        time.sleep(wakeUpTimeInterval)
 
 
 # 调试用函数

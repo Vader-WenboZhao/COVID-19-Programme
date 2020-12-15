@@ -103,7 +103,8 @@ def sendToPCPart():
             localTraces.remove(localTraces[0])
             time.sleep(1)
         except BaseException as be:
-            print("PCPart", be)
+            print(be, "at sendToPCPart")
+            time.sleep(5)
             continue
 
 
@@ -114,7 +115,7 @@ def recvFromPCPart():
         if recvTCPData == b'[]' or b'':
             continue
         msg = recvTCPData.decode('utf-8')
-        print("recv from PyGate part:", msg)
+        print("recv from PC part:", msg)
         msg = eval(msg)
         if isinstance(msg, list):
             msg = set(msg)
