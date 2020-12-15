@@ -17,17 +17,27 @@ import getIp
 '''
 
 MyIP = getIp.get_host_ip()
+# 本机IP地址
 HOST = str(MyIP)
+# 区块链相关端口
 PORT = 5010
 
+# 修改风险名单的网站, 腾讯云服务器
 RISKYADRESS = f'http://121.4.89.43:5000/'
-TIMERANGE = 60 # 1min
+# 风险时间范围, 默认为2h, 前后TIMERANGE时间范围内算作有风险
+TIMERANGE = 7200
 
+# 默认的注册节点, 可修改为区块链里任意的某个节点
 registerAddress = "http://192.168.1.105:8000"
+# 本机的地址
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
+
 
 riskyPseudonyms = set()
 
+'''
+区块链部分代码的注释见RegionServerPC的代码
+'''
 
 class Block:
     def __init__(self, index, traces, timestamp, previous_hash, nonce=0):
@@ -371,7 +381,7 @@ def announce_new_block(block):
 
 
 
-
+# 向服务器添加风险匿名, 通过命令行操作
 def addPseudonyms(nameList):
     if not isinstance(nameList, list):
         return False, "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList))
@@ -380,10 +390,13 @@ def addPseudonyms(nameList):
         if not isinstance(name, str):
             return False, 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name))
 
+    # 函数内部是一个一个添加
     for name in nameList:
         data = {'riskyName':name}
         try:
+            # 通过HTTP添加
             response = requests.post(RISKYADRESS + f'risky/add', json=data)
+            # 成功
             if response.status_code == 201:
                 continue
             else:
@@ -396,6 +409,7 @@ def addPseudonyms(nameList):
 
 
 
+# 从服务器删除风险匿名, 通过命令行操作
 def removePseudonyms(nameList):
     if not isinstance(nameList, list):
         return False, "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList))
@@ -407,7 +421,9 @@ def removePseudonyms(nameList):
     for name in nameList:
         data = {'riskyName':name}
         try:
+            # 通过HTTP删除
             response = requests.post(RISKYADRESS + f'risky/delete', json=data)
+            # 成功
             if response.status_code == 201:
                 continue
             else:
@@ -430,7 +446,6 @@ def findPatientTimeLocation(patientPseudonymList):
             return False
         continue
     result = []
-    # print("patientPseudonymList:", patientPseudonymList)
     for blk in blockchain.chain:
         # 没有任何trace
         if len(blockchain.chain) == 1:
@@ -474,7 +489,7 @@ def addRiskyPseudonyms(patientPseudonymList):
         # riskyPseudonyms是个集合
         riskyPseudonyms = findRiskyPseudonyms(TLtuple[0], TLtuple[1])
         riskyPseudonyms = list(riskyPseudonyms)
-    # return (Bool, str)
+    # 返回类型是 (Bool, str)
     return addPseudonyms(riskyPseudonyms)
 
 
@@ -491,6 +506,7 @@ def deleteRiskyPseudonym(riskyPseudonymList):
     return removePseudonyms(riskyPseudonymList)
 
 
+# 打印区块链,先将区块链转化为字典组成的列表
 def printChain():
     chain_data = []
     for block in blockchain.chain:
@@ -499,6 +515,7 @@ def printChain():
     return
 
 
+# 在区块链里注册节点
 def register():
     global registerAddress
     global myAddress
@@ -511,6 +528,7 @@ def register():
 
 
 
+#
 def renewRiskyPseudonymes():
     global RISKYADRESS
     global riskyPseudonyms
@@ -526,7 +544,7 @@ def renewRiskyPseudonymes():
     return True, "Successfully get risky pseudonyms"
 
 
-# register node 和 quit 还没写
+# 操作进程, 命令行
 def operation_thread():
     while True:
         try:

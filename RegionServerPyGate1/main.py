@@ -12,6 +12,20 @@ import _thread
 import getIp
 
 
+
+
+# PC部分的IP地址和端口号
+PCAddr = ('192.168.1.105', 3500)
+# Wi-Fi ssid
+wifissid = 'WiLNA305'
+# Wi-Fi Passcode
+wifiPasscode = "305netlab"
+# NTP 服务器地址, 连接校园网的情况下只能访问 time.dlut.edu.cn, 其他情况可以 ntp.aliyun.com
+NTPServer = "time.dlut.edu.cn"
+# 发送trace信息给PC端的时间间隔
+sendTraceInterval = 1
+
+
 '''
 LoRa part
 '''
@@ -19,29 +33,19 @@ LoRaBand = LoRa.EU868
 
 # lora = LoRa(mode=LoRa.LORA, tx_iq=True, region=LoRaBand)
 lora = LoRa(mode=LoRa.LORA, region=LoRa.EU868)
+# 接收LoRa信号的套接字
 lora_sock = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 lora_sock.setblocking(False)
 
 localTraces = []
 riskyNames = set()
-# 测试
 
-'''
-wifi part
-'''
-# outdoor hotspot
-# PCAddr = ('172.20.10.3', 8081)
-# indoor Wi-Fi
-PCAddr = ('192.168.1.105', 3000)
 print('\nConnecting to WiFi...',  end='')
 # Connect to a Wifi Network
 wlan = WLAN(mode=WLAN.STA)
 
-# 室外用热点
-# wlan.connect(ssid='zwbHotspot', auth=(WLAN.WPA2, "zhaowenbo"))
-# 室内用Wi-Fi
-wlan.connect(ssid='WiLNA305', auth=(WLAN.WPA2, "305netlab"))
-
+# 连接 Wi-Fi
+wlan.connect(ssid = wifissid, auth=(WLAN.WPA2, wifiPasscode))
 while not wlan.isconnected():
     print('.', end='')
     time.sleep(1)
@@ -55,30 +59,19 @@ Sync time
 print('Syncing RTC via ntp...', end='')
 rtc = RTC()
 
-# 室外
-# rtc.ntp_sync(server="ntp.aliyun.com")
-# 室内
-rtc.ntp_sync(server="time.dlut.edu.cn")
 
+# 连接NTP server
+rtc.ntp_sync(server= NTPServer)
 while not rtc.synced():
     print('.', end='')
     time.sleep(.5)
 print(" OK\n")
 
-'''
-# Read the GW config file from Filesystem
-fp = open('/flash/config.json','r')
-buf = fp.read()
 
-# Start the Pygate
-machine.pygate_init(buf)
-# disable degub messages
-# machine.pygate_debug_level(1)
-'''
-
-
+# 和 PC 端通信的socket
 socketToPC = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 
+# TCP连接PC端
 while True:
     try:
         time.sleep(3)
@@ -90,39 +83,49 @@ while True:
         time.sleep(3)
         continue
 
+# 和PC端通信的线程: 发送数据(trace数据)
 def sendToPCPart():
     global localTraces
+    global sendTraceInterval
 
     while True:
+        # 内存中没有暂存的trace数据
         if len(localTraces) == 0:
             time.sleep(1)
             continue
         try:
+            # 把本地暂存的trace数据发送给PC端
             messageToSend = bytes(str(localTraces[0]), 'utf-8')
             socketToPC.send(messageToSend)
             localTraces.remove(localTraces[0])
-            time.sleep(1)
+            time.sleep(sendTraceInterval)
         except BaseException as be:
             print(be, "at sendToPCPart")
             time.sleep(5)
             continue
 
 
+# 和PC端通信的线程: 接收数据(风险名单)
 def recvFromPCPart():
     global riskyNames
+
     while True:
         recvTCPData = socketToPC.recv(512)
+        # 风险名单为空
         if recvTCPData == b'[]' or b'':
             continue
+        # bytes数据转str
         msg = recvTCPData.decode('utf-8')
         print("recv from PC part:", msg)
+        # str数据转list
         msg = eval(msg)
         if isinstance(msg, list):
+            # list数据转set, 因为set不能用于网络传输
             msg = set(msg)
             riskyNames = msg
 
 
-
+# 接收来自场所设备的信息, 使用struct库
 def recvFromFixedDevice():
     global localTraces
     global riskyNames
@@ -131,8 +134,10 @@ def recvFromFixedDevice():
         try:
             recv_pkg = lora_sock.recv(512)
             if (len(recv_pkg) > 2):
+                # recv_pkg的第2个字节记录的是数据长度,即"BB%ds"里第二个B
                 recv_pkg_len = recv_pkg[1]
-
+                # 按B、B、%ds读取数据分别赋值给device_id、pkg_len、msgJson
+                # unpack内的语句是, recv_pkg_len格式化赋值%d, 按"BB%d"解析recv_pkg
                 device_id, pkg_len, msgJson = struct.unpack("BB%ds" % recv_pkg_len, recv_pkg)
                 msgStr = msgJson.decode()
                 try:
@@ -141,24 +146,23 @@ def recvFromFixedDevice():
                 except BaseException:
                     continue
 
+                # 是否是时间校对请求, 是的话就回复当前时间戳, 根据NTP服务器的信息回复
                 if 'timeAsk' in msg.keys() and msg['timeAsk']==True:
+                    # BBL: 第一个字节存device_id, 第二个字节存1, 最后的长整数存时间戳
                     ack_pkg = struct.pack("!BBL", device_id, 1, time.mktime(rtc.now()))
                     lora_sock.send(ack_pkg)
                     continue
+                # 接收到trace数据
                 else:
-                    # sendMessage = {'traces': localTraces[0], 'sendDevice': 'fixedDevice', 'aim': regionServerNum}
                     if msg['sendDevice'] == 'fixedDevice':
                         localTraces.append(msg['traces'])
-                    # ack_pkg = struct.pack(_LORA_PKG_ACK_FORMAT % len(str(riskyNames)), device_id, 1, 200, len(str(riskyNames)), str(riskyNames))
+                    # 将风险匿名名单发送给场所设备
                     riskNamesStr = str(riskyNames)
-                    # 在串的前面写入串的长度然后写入串本身
+                    # !!! 在串的前面写入串的长度然后写入串本身, 便于接收端解析
+                    # 格式相当于"iBB%ds", i保存riskNamesStr的长度, B保存device_id, B保存200, %ds保存riskNamesStr
                     ack_pkg = struct.pack("iBB" + str(len(riskNamesStr)) + "s", len(riskNamesStr), device_id, 200, riskNamesStr)
                     lora_sock.send(ack_pkg)
 
-                '''
-                ack_pkg = struct.pack(_LORA_PKG_ACK_FORMAT, device_id, 1, 200)
-                lora_sock.send(ack_pkg)
-                '''
         except BaseException as be:
             continue
 

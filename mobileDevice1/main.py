@@ -38,9 +38,11 @@ outdateTime = 1209600
 
 
 H = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-# 现在的假名
+# 当前使用的假名
 presentPseudonym = None
-riskyLevel = 0 # 0:无风险(绿); 1:有风险(黄); 2:确诊(红);
+# 风险等级, 0:无风险(绿); 1:有风险(黄); 2:确诊(红);
+riskyLevel = 0
+# 风险等级和指示灯颜色对照
 LEVELCOLOR = {0: 0x000f00, 1: 0x0f0f00, 2: 0x0f0000}
 
 
@@ -53,6 +55,7 @@ def blink(num = 3, period = .5, color = 0):
         pycom.rgbled(0)
 
 
+# 根据风险等级展现指示灯颜色
 def displayriskyLevel():
     global levelColor
     global displayInterval
@@ -62,7 +65,7 @@ def displayriskyLevel():
         time.sleep(displayInterval)
 
 
-# 删除过期(14days)的假名
+# 删除过期(outdateTime,默认14天)的假名
 def deleteOldNames(nameList):
     global outdateTime
 
@@ -98,6 +101,7 @@ def savePseudonym(newName):
 
 
 
+# 产生num位的随机字符串
 def ranstr(num):
     salt = ''
     for i in range(num):
@@ -105,7 +109,7 @@ def ranstr(num):
     return salt
 
 
-# 产生假名
+# 产生假名(随机字符串)
 def generatePseudonym():
     global nameLength
 
@@ -118,12 +122,13 @@ lora = LoRa(mode=LoRa.LORA, region=LoRaBand, sf=7)
 # 数据包发送套接字
 socketToFixedDevice = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketToFixedDevice.setblocking(False)
+# 数据包接收套接字, 阻塞
 socketFromFixedDevice = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketFromFixedDevice.setblocking(True)
 
 
 
-'''测试代码'''
+# 定期更新假名线程
 def updatePseudonym():
     global presentPseudonym
     global latestUpdateTime
@@ -143,6 +148,7 @@ def updatePseudonym():
             savePseudonym(presentPseudonym)
 
 
+# 匹配自己的假名使用记录和风险匿名名单, 线程
 def matchRiskyNames():
     global riskyNames
     global usedNames
@@ -158,7 +164,7 @@ def matchRiskyNames():
                 continue
 
 
-# mobile device 不接收信息
+# 信息接收线程
 def receiver():
     global socketFromFixedDevice
     global riskyNames
@@ -169,23 +175,23 @@ def receiver():
         try:
             receivedJson = socketFromFixedDevice.recv(256)
             receivedMessage = json.loads(receivedJson)
+            # 收到唤醒信息
             if receivedMessage['sendDevice'] == 'fixedDevice' and ('wake' in receivedMessage.keys()):
                 if receivedMessage['wake']:
-                    # print("Waking up ...")
-                    riskyNames = receivedMessage['riskyNames'] # 只包含名字的列表
+                    # 风险匿名名单, [str, str, str, ...]
+                    riskyNames = receivedMessage['riskyNames']
                     print(riskyNames, time.time())
+                    # 被唤醒后发送自己的信息
                     messageToSend = {'name': presentPseudonym, 'sendDevice': 'mobileDevice'}
                     messageToSendJson = json.dumps(messageToSend)
                     socketToFixedDevice.send(messageToSendJson)
                     print("sent peudonym:", presentPseudonym)
                     matchRiskyNames()
 
-                    # 测试代码
+                    # 每发送一次匿名信息后就休眠一段时间
                     time.sleep(sleepTimeInterval)
 
         except Exception as e:
-            # print("Error in receive")
-            # print(e)
             time.sleep(sleepTimeInterval)
             continue
 
