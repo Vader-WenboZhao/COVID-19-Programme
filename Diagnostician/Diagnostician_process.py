@@ -1,12 +1,10 @@
-from urllib.parse import urlparse
+# from urllib.parse import urlparse
 from hashlib import sha256
 from flask import Flask, jsonify, request
 
-import socketserver
 import threading
 import requests
 import json
-import socket
 import time
 import getIp
 

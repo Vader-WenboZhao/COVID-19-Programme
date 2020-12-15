@@ -1,7 +1,6 @@
 from network import WLAN
 from network import LoRa
 import time
-import machine
 from machine import RTC
 import pycom
 import socket
@@ -9,7 +8,6 @@ import json
 import os
 import struct
 import _thread
-import getIp
 
 
 

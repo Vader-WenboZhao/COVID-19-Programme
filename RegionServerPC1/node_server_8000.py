@@ -1,10 +1,8 @@
-from urllib.parse import urlparse
 from hashlib import sha256
 from flask import Flask, jsonify, request
-from multiprocessing import  Process # 多进程
 import getIp
 
-import socketserver
+# import socketserver
 import threading
 import requests
 import json

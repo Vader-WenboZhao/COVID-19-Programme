@@ -2,18 +2,15 @@ from network import LoRa
 import socket
 import _thread
 import time
-import utime
 import pycom
 import json
-from parameters import *
-import sys
-import myrandom
 from Trace import Trace
-from machine import Timer
 import os
 import struct
 
 
+# 该场所设备代表的地点(推荐编号表示)
+LOCATION = 'ABC12345'
 
 pycom.heartbeat(False)
 
@@ -46,6 +43,8 @@ waiting_ack = True
 # Fixed_device产生的Trace不带有time
 def createTrace(pseudonym):
     global timeDifference
+    global LOCATION
+
     newTrace = Trace(pseudonym, LOCATION, time.time()+timeDifference)
     '''签名就会超出lora可传送的包大小'''
     # newTrace.sign(PRI_KEY_PATH)

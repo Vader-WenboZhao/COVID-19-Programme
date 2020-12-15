@@ -1,11 +1,9 @@
 from network import LoRa
 import socket
 import time
-import utime
 import pycom
 import json
 import _thread
-import crypto
 import myrandom
 
 
