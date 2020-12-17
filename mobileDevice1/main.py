@@ -114,7 +114,7 @@ def generatePseudonym():
     return ranstr(nameLength)
 
 
-lora = LoRa(mode=LoRa.LORA, region=LoRaBand, sf=7)
+lora = LoRa(mode=LoRa.LORA, region=LoRaBand, bandwidth=LoRa.BW_500KHZ, coding_rate=LoRa.CODING_4_5, sf=7, tx_power=8)
 
 
 # 数据包发送套接字

@@ -13,11 +13,11 @@ import _thread
 
 
 # PC部分的IP地址和端口号
-PCAddr = ('192.168.1.105', 3500)
+PCAddr = ('192.168.1.101', 3100)
 # Wi-Fi ssid
-wifissid = 'WiLNA305'
+wifissid = 'wenbo_TP-LINK'
 # Wi-Fi Passcode
-wifiPasscode = "305netlab"
+wifiPasscode = "13860666"
 # NTP 服务器地址, 连接校园网的情况下只能访问 time.dlut.edu.cn, 其他情况可以 ntp.aliyun.com
 NTPServer = "time.dlut.edu.cn"
 # 发送trace信息给PC端的时间间隔
@@ -30,7 +30,7 @@ LoRa part
 LoRaBand = LoRa.EU868
 
 # lora = LoRa(mode=LoRa.LORA, tx_iq=True, region=LoRaBand)
-lora = LoRa(mode=LoRa.LORA, region=LoRa.EU868)
+lora = LoRa(mode=LoRa.LORA, region=LoRaBand, bandwidth=LoRa.BW_125KHZ, coding_rate=LoRa.CODING_4_8, sf=9, tx_power=14)
 # 接收LoRa信号的套接字
 lora_sock = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 lora_sock.setblocking(False)
@@ -140,7 +140,6 @@ def recvFromFixedDevice():
                 msgStr = msgJson.decode()
                 try:
                     msg = eval(msgStr)
-                    print(msg)
                 except BaseException:
                     continue
 
@@ -149,6 +148,7 @@ def recvFromFixedDevice():
                     # BBL: 第一个字节存device_id, 第二个字节存1, 最后的长整数存时间戳
                     ack_pkg = struct.pack("!BBL", device_id, 1, time.mktime(rtc.now()))
                     lora_sock.send(ack_pkg)
+                    print(msg, "Time ACK sent")
                     continue
                 # 接收到trace数据
                 else:
@@ -160,6 +160,7 @@ def recvFromFixedDevice():
                     # 格式相当于"iBB%ds", i保存riskNamesStr的长度, B保存device_id, B保存200, %ds保存riskNamesStr
                     ack_pkg = struct.pack("iBB" + str(len(riskNamesStr)) + "s", len(riskNamesStr), device_id, 200, riskNamesStr)
                     lora_sock.send(ack_pkg)
+                    print(msg, "ACK sent")
 
         except BaseException as be:
             continue

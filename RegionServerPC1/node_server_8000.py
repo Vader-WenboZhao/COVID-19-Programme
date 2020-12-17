@@ -21,12 +21,12 @@ import sys
 HOST = str(getIp.get_host_ip())
 # 区块链相关端口
 PORT = 8000
-print("IP Address:", HOST)
+print("IP Address:", HOST, "\n"+'-'*80)
 
 # 修改风险名单的网站, 腾讯云服务器
 RISKYADRESS = f'http://121.4.89.43:5000/'
 # 默认的注册节点, 可修改为区块链里任意的某个节点
-registerAddress = "http://192.168.1.105:8000"
+registerAddress = "http://192.168.1.101:8000"
 # 本机的地址
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 
@@ -34,7 +34,7 @@ myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 socketPyGate = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 socketPyGate.setblocking(True)
 # PyGate的IP地址+端口号
-listenAddrFromPyGate = (HOST, 3500)
+listenAddrFromPyGate = (HOST, 3100)
 socketPyGate.bind(listenAddrFromPyGate)
 
 # 内存中的风险名单
@@ -482,7 +482,7 @@ def operation_thread():
                 return
             else:
                 print("Valid order")
-                pass
+            print("\n"+'-'*80)
         except BaseException as be:
             print(be)
             continue
@@ -494,7 +494,7 @@ def recvFromPyGatePart():
     socketPyGate.listen(5)
     # 建立客户端连接
     connection, addr = socketPyGate.accept()
-    print("Connected successfully, PyGate part's address:", addr)
+    print("Connected successfully, PyGate part's address:", addr, "\n"+'-'*80)
     # 一旦建立连接就立刻发送风险匿名名单给PyGate端
     connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
     while True:
@@ -507,11 +507,11 @@ def recvFromPyGatePart():
         # if not self.data:
         #     continue
         data = eval(str(data, encoding='utf-8'))
-        print("receive from fixed devices:", data)
+        print("receive from fixed devices:\n", data)
         # 接收PyGate发来的trace信息, 创建trace、上传到区块链上
         result = newTrace(data['pseudonym'], data['timestamp'], data['location'])
-        print(result[0])
-        print('-'*40)
+        # print(result[0])
+        print('-'*80)
         # 更新风险匿名名单
         renewRiskyPseudonymes()
         # 将风险匿名名单发送给PyGate端
@@ -525,7 +525,7 @@ def autoSave():
     global blockchain
     # 获取当前任务的文件的路径
     workPath = sys.path[0]
-    print(workPath)
+    print(workPath, "\n"+'-'*80)
     while True:
         try:
             f = open(workPath + '/blockchain.txt', 'w')

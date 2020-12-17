@@ -23,20 +23,28 @@ DEVICE_ID = 0x01
 riskyPseudonymSet = set()
 localTraces = []
 
-# 未收到ACK重复发送trace时间间隔
-resendTraceInterval = 1
-# 发送唤醒信息的时间间隔, 应小于移动设备的休眠时长
+# 未收到ACK重复发送trace时间间隔, 因为硬件限制必须大于 2, 否则接收不到ACK (s)
+resendTraceInterval = 2
+# 发送唤醒信息的时间间隔, 应小于移动设备的休眠时长 (s)
 wakeUpTimeInterval = 4
 # 是否收到地区服务器的ACK
 HasReceived = False
-# 发送给地区服务器的两种情况
-case = 2
 # 时间校对成功标志
 timeHasReceived = False
-# 时间差, 用于时间校对
+# 时间差, 用于时间校对, 也是设备工作起始时间 (s)
 timeDifference = 0
 # 是否收需要等待ACK
 waiting_ack = True
+# 模式, True代表和网关通信, False代表和移动设备通信
+communicateWithGateway = True
+# 模式变化标志位, 针对接收线程
+modeChange = False
+# 和移动设备通信的时长 (s)
+TIMELENGTHMOBILE = 1 * 60
+# 和网关通信的时长 (s)
+TIMELENGTHGATEWAY = 20
+# 模式检查的时间间隔 (s)
+modeRenewInterval = 5
 
 
 
@@ -54,8 +62,7 @@ def createTrace(pseudonym):
 
 # use tx_iq to avoid listening to our own messages
 # lora = LoRa(mode=LoRa.LORA, tx_iq=True, region=LoRaBand, sf=7)
-lora = LoRa(mode=LoRa.LORA, region=LoRaBand, sf=7)
-
+lora = LoRa(mode=LoRa.LORA, region=LoRaBand, bandwidth=LoRa.BW_125KHZ, coding_rate=LoRa.CODING_4_8, sf=9, tx_power=14)
 # 和移动设备通信的socket
 socketToMobileDevice = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketToMobileDevice.setblocking(False)
@@ -67,6 +74,31 @@ socketReceive = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketReceive.setblocking(True)
 
 
+# 控制通信模式的线程
+def modeControl():
+    print("Mode control thread starts")
+    global communicateWithGateway
+    global TIMELENGTHGATEWAY
+    global TIMELENGTHMOBILE
+    global timeDifference
+    global modeRenewInterval
+    global modeChange
+
+    # 每 modeRenewInterval 秒检查一次
+    while True:
+        if (time.time() - timeDifference) % (TIMELENGTHGATEWAY+TIMELENGTHMOBILE) <= TIMELENGTHMOBILE:
+            if communicateWithGateway == True:
+                modeChange = True
+            communicateWithGateway = False
+            time.sleep(modeRenewInterval)
+        else:
+            if communicateWithGateway == False:
+                modeChange = True
+            communicateWithGateway = True
+            time.sleep(modeRenewInterval)
+
+
+
 # 和地区服务器通信的线程
 def sendToRegionServer():
     global waiting_ack
@@ -76,9 +108,11 @@ def sendToRegionServer():
     global socketReceive
     global HasReceived
     global timeHasReceived
-    global case
     global timeDifference
     global resendTraceInterval
+    global communicateWithGateway
+    global modeRenewInterval
+    global modeChange
 
     '''
     时间校对, 误差为秒级
@@ -96,17 +130,33 @@ def sendToRegionServer():
         time.sleep(1)
         continue
 
+    # 时间校对成功, 首先收集traces
+    lora = LoRa(mode=LoRa.LORA, region=LoRaBand, bandwidth=LoRa.BW_500KHZ, coding_rate=LoRa.CODING_4_5, sf=7, tx_power=8)
+
     # waiting_ack标志位设为True,表示未收到ACK,需要等待ACK
     waiting_ack = True
 
     while True:
-        # 发送trace, 因为LoRa包的大小限制, 一次发送一条trace
-        if len(localTraces)>=1:
-            case = 1
+        # 检查通信模式
+        if communicateWithGateway == False:
+            time.sleep(modeRenewInterval)
+            continue
+
+        # 换成远程通信的LoRa参数
+        if modeChange == True:
+            lora = LoRa(mode=LoRa.LORA, region=LoRaBand, bandwidth=LoRa.BW_125KHZ, coding_rate=LoRa.CODING_4_8, sf=9, tx_power=14)
+            modeChange = False
+
+        # # 发送trace, 因为LoRa包的大小限制, 一次发送一条trace
+        if len(localTraces) > 0:
             sendMessage = {'traces': localTraces[0], 'sendDevice': 'fixedDevice'}
             sendMessage = str(sendMessage)
+        # 没有任何新的trace存在本地, 就一直等待到 communicateWithGateway==False
         else:
+            while communicateWithGateway == True:
+                time.sleep(1)
             continue
+
 
         # 第二个B存sendMessage的大小, 和%d是同一个数, 便于接收端解析后面的%ds
         pkgTrace = struct.pack("BB%ds" % len(sendMessage), DEVICE_ID, len(sendMessage), sendMessage)
@@ -124,7 +174,6 @@ def sendToRegionServer():
             socketToRegionServer.send(pkgTrace)
             # 重复发送后等待一段时间
             time.sleep(resendTraceInterval)
-            continue
         continue
 
 
@@ -135,10 +184,14 @@ def receive():
     global timeHasReceived
     global timeDifference
     global riskyPseudonymSet
+    global modeChange
+    global communicateWithGateway
 
 
     while True:
+
         recvMessage = socketReceive.recv(256)
+        # print("received new message:", recvMessage)
 
         # 时间还未校对成功,则只处理时间校对回复 (时间未校对,场所设备节点就不正式工作)
         while not timeHasReceived:
@@ -161,6 +214,7 @@ def receive():
                 except BaseException as be:
                     continue
 
+
         # 接收有关trace的数据
         # 和移动设备通信用json形式,和地区服务器通信用struct库
         if (len(recvMessage) > 0):
@@ -172,7 +226,7 @@ def receive():
                     newTrace = createTrace(message['name'])
                     continue
             # json.loads报错就是来自地区服务器
-            except BaseException:
+            except BaseException as be1:
                 # 先读出串的长度，然后按这个长度读出串
                 # 先读出strLength, device_id, ack, 在recvMessage的前6字节
                 strLength, device_id, ack = struct.unpack("iBB", recvMessage[0:6])
@@ -194,11 +248,28 @@ def receive():
 
 
 
-# 唤醒移动设备的进程
+# 唤醒移动设备的进程, 和移动设备通信的进程
 def wakeup():
     global wakeUpTimeInterval
+    global timeHasReceived
+    global communicateWithGateway
+    global modeRenewInterval
+    global modeChange
+
+    while not timeHasReceived:
+        time.sleep(2)
 
     while True:
+        # 检查通信模式
+        if communicateWithGateway == True:
+            time.sleep(modeRenewInterval)
+            continue
+
+        # 换成近程通信的LoRa模式
+        if modeChange == True:
+            lora = LoRa(mode=LoRa.LORA, region=LoRaBand, bandwidth=LoRa.BW_500KHZ, coding_rate=LoRa.CODING_4_5, sf=7, tx_power=8)
+            modeChange = False
+
         # 集合类型放进JSON报错, riskyPseudonymSet转化为list类型
         wakeMessage = {'wake': True, 'riskyNames': list(riskyPseudonymSet), 'sendDevice': 'fixedDevice'}
         wakeMessageJson = json.dumps(wakeMessage)
@@ -207,10 +278,16 @@ def wakeup():
         time.sleep(wakeUpTimeInterval)
 
 
-# 调试用函数
+# 调试用函数, 输出本地traces
 def printLocalTraces():
     print(localTraces)
+
+# 调试函数, 输出目前模式
+def printMode():
+    global communicateWithGateway
+    print(communicateWithGateway)
 
 sendToRegionServer = _thread.start_new_thread(sendToRegionServer,())
 thread_receive = _thread.start_new_thread(receive,())
 wakeupThread = _thread.start_new_thread(wakeup,())
+modeControlThread = _thread.start_new_thread(modeControl,())
