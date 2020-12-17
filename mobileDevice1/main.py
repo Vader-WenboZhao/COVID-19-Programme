@@ -204,8 +204,11 @@ def printPseudonyms():
     print(f.read())
     f.close()
 
-# 测试, 真正情况下不 启动就清理Pseudonyms
-cleanPseudonyms()
-pseudonymThread = _thread.start_new_thread(updatePseudonym, ())
-receiverThread = _thread.start_new_thread(receiver, ())
-displayColorThread = _thread.start_new_thread(displayriskyLevel, ())
+
+if __name__ == '__main__':
+    
+    # 测试, 真正情况下不 启动就清理Pseudonyms
+    cleanPseudonyms()
+    pseudonymThread = _thread.start_new_thread(updatePseudonym, ())
+    receiverThread = _thread.start_new_thread(receiver, ())
+    displayColorThread = _thread.start_new_thread(displayriskyLevel, ())

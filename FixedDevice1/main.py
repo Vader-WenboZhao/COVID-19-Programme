@@ -287,7 +287,10 @@ def printMode():
     global communicateWithGateway
     print(communicateWithGateway)
 
-sendToRegionServer = _thread.start_new_thread(sendToRegionServer,())
-thread_receive = _thread.start_new_thread(receive,())
-wakeupThread = _thread.start_new_thread(wakeup,())
-modeControlThread = _thread.start_new_thread(modeControl,())
+
+if __name__ == '__main__':
+    
+    sendToRegionServer = _thread.start_new_thread(sendToRegionServer,())
+    thread_receive = _thread.start_new_thread(receive,())
+    wakeupThread = _thread.start_new_thread(wakeup,())
+    modeControlThread = _thread.start_new_thread(modeControl,())

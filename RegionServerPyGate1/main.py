@@ -166,6 +166,9 @@ def recvFromFixedDevice():
             continue
 
 
-threadRecvFromFixedDevice = _thread.start_new_thread(recvFromFixedDevice,())
-threadSendToPC = _thread.start_new_thread(sendToPCPart,())
-threadRecvFromPC = _thread.start_new_thread(recvFromPCPart,())
+
+if __name__ == '__main__':
+    
+    threadRecvFromFixedDevice = _thread.start_new_thread(recvFromFixedDevice,())
+    threadSendToPC = _thread.start_new_thread(sendToPCPart,())
+    threadRecvFromPC = _thread.start_new_thread(recvFromPCPart,())
