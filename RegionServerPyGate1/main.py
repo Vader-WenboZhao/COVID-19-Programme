@@ -13,7 +13,7 @@ import _thread
 
 
 # PC部分的IP地址和端口号
-PCAddr = ('192.168.1.101', 3100)
+PCAddr = ('172.19.157.52', 3000)
 # Wi-Fi ssid
 wifissid = 'wenbo_TP-LINK'
 # Wi-Fi Passcode
@@ -81,6 +81,16 @@ while True:
         time.sleep(3)
         continue
 
+
+# LED灯闪烁
+def blink(num = 3, period = .5, color = 0):
+    """ LED blink """
+    for i in range(0, num):
+        pycom.rgbled(color)
+        time.sleep(period)
+        pycom.rgbled(0)
+
+
 # 和PC端通信的线程: 发送数据(trace数据)
 def sendToPCPart():
     global localTraces
@@ -109,6 +119,9 @@ def recvFromPCPart():
 
     while True:
         recvTCPData = socketToPC.recv(512)
+
+        blink(num=1, period=.5, color=0x1F1F1F)
+
         # 风险名单为空
         if recvTCPData == b'[]' or b'':
             continue
@@ -131,6 +144,7 @@ def recvFromFixedDevice():
     while True:
         try:
             recv_pkg = lora_sock.recv(512)
+
             if (len(recv_pkg) > 2):
                 # recv_pkg的第2个字节记录的是数据长度,即"BB%ds"里第二个B
                 recv_pkg_len = recv_pkg[1]
@@ -142,6 +156,8 @@ def recvFromFixedDevice():
                     msg = eval(msgStr)
                 except BaseException:
                     continue
+
+                blink(num=1, period=.5, color=0x00003F)
 
                 # 是否是时间校对请求, 是的话就回复当前时间戳, 根据NTP服务器的信息回复
                 if 'timeAsk' in msg.keys() and msg['timeAsk']==True:
@@ -168,7 +184,7 @@ def recvFromFixedDevice():
 
 
 if __name__ == '__main__':
-    
+
     threadRecvFromFixedDevice = _thread.start_new_thread(recvFromFixedDevice,())
     threadSendToPC = _thread.start_new_thread(sendToPCPart,())
     threadRecvFromPC = _thread.start_new_thread(recvFromPCPart,())

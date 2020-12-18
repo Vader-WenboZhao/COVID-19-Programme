@@ -26,7 +26,7 @@ RISKYADRESS = f'http://121.4.89.43:5000/'
 TIMERANGE = 7200
 
 # 默认的注册节点, 可修改为区块链里任意的某个节点
-registerAddress = "http://192.168.1.105:8000"
+registerAddress = "http://192.168.1.101:8000"
 # 本机的地址
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 

@@ -26,7 +26,7 @@ print("IP Address:", HOST, "\n"+'-'*80)
 # 修改风险名单的网站, 腾讯云服务器
 RISKYADRESS = f'http://121.4.89.43:5000/'
 # 默认的注册节点, 可修改为区块链里任意的某个节点
-registerAddress = "http://192.168.1.101:8000"
+registerAddress = "http://172.19.157.52:8000"
 # 本机的地址
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 
@@ -34,7 +34,7 @@ myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 socketPyGate = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 socketPyGate.setblocking(True)
 # PyGate的IP地址+端口号
-listenAddrFromPyGate = (HOST, 3100)
+listenAddrFromPyGate = (HOST, 3000)
 socketPyGate.bind(listenAddrFromPyGate)
 
 # 内存中的风险名单
@@ -494,7 +494,7 @@ def recvFromPyGatePart():
     socketPyGate.listen(5)
     # 建立客户端连接
     connection, addr = socketPyGate.accept()
-    print("Connected successfully, PyGate part's address:", addr, "\n"+'-'*80)
+    print("\nConnected successfully, PyGate part's address:", addr, "\n"+'-'*80)
     # 一旦建立连接就立刻发送风险匿名名单给PyGate端
     connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
     while True:

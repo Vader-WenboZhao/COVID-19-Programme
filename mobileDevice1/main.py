@@ -19,17 +19,17 @@ pycom.heartbeat(False)
 riskyNames = []
 usedNames = []
 
-# 发送一次匿名信息之后的休眠时常
-sleepTimeInterval = 10
-# 检查当前匿名已使用时长的间隔时间
+# 发送一次匿名信息之后的休眠时常 (s)
+sleepTimeInterval = 30
+# 检查当前匿名已使用时长的间隔时间 (s)
 checkTimeInterval = 10
-# 更换匿名的周期
-changeNameInterval = 30
+# 更换匿名的周期 (s)
+changeNameInterval = 20 * 60
 # 匿名长度
 nameLength = 16
-# 健康状态指示灯闪烁间隔时间
+# 健康状态指示灯闪烁间隔时间 (s)
 displayInterval = 2
-# 最新的更新密钥的时间
+# 最新的更新密钥的时间 (s)
 latestUpdateTime = None
 # 匿名信息的存储时长(14天)
 outdateTime = 1209600
@@ -206,7 +206,7 @@ def printPseudonyms():
 
 
 if __name__ == '__main__':
-    
+
     # 测试, 真正情况下不 启动就清理Pseudonyms
     cleanPseudonyms()
     pseudonymThread = _thread.start_new_thread(updatePseudonym, ())

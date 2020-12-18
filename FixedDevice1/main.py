@@ -24,7 +24,7 @@ riskyPseudonymSet = set()
 localTraces = []
 
 # 未收到ACK重复发送trace时间间隔, 因为硬件限制必须大于 2, 否则接收不到ACK (s)
-resendTraceInterval = 2
+resendTraceInterval = 3
 # 发送唤醒信息的时间间隔, 应小于移动设备的休眠时长 (s)
 wakeUpTimeInterval = 4
 # 是否收到地区服务器的ACK
@@ -40,11 +40,13 @@ communicateWithGateway = True
 # 模式变化标志位, 针对接收线程
 modeChange = False
 # 和移动设备通信的时长 (s)
-TIMELENGTHMOBILE = 1 * 60
+TIMELENGTHMOBILE = 4 * 60
 # 和网关通信的时长 (s)
-TIMELENGTHGATEWAY = 20
+TIMELENGTHGATEWAY = 1 * 60
 # 模式检查的时间间隔 (s)
-modeRenewInterval = 5
+modeRenewInterval = 1
+# 灯光 pkgGateway:亮紫色, pkgMobile:亮黄色, modeGateway:暗紫色, modeMobile:暗黄色
+lightColor = {'pkgGateway':0x00FFFF, 'pkgMobile':0xFFFF00, 'modeGateway':0x001010, 'modeMobile':0x101000}
 
 
 
@@ -74,15 +76,24 @@ socketReceive = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketReceive.setblocking(True)
 
 
+# LED灯闪烁
+def blink(num = 3, period = .5, color = 0):
+    """ LED blink """
+    for i in range(0, num):
+        pycom.rgbled(color)
+        time.sleep(period)
+        pycom.rgbled(0)
+
+
 # 控制通信模式的线程
 def modeControl():
-    print("Mode control thread starts")
     global communicateWithGateway
     global TIMELENGTHGATEWAY
     global TIMELENGTHMOBILE
     global timeDifference
     global modeRenewInterval
     global modeChange
+    global lightColor
 
     # 每 modeRenewInterval 秒检查一次
     while True:
@@ -90,11 +101,13 @@ def modeControl():
             if communicateWithGateway == True:
                 modeChange = True
             communicateWithGateway = False
+            pycom.rgbled(lightColor['modeMobile'])
             time.sleep(modeRenewInterval)
         else:
             if communicateWithGateway == False:
                 modeChange = True
             communicateWithGateway = True
+            pycom.rgbled(lightColor['modeGateway'])
             time.sleep(modeRenewInterval)
 
 
@@ -186,6 +199,7 @@ def receive():
     global riskyPseudonymSet
     global modeChange
     global communicateWithGateway
+    global lightColor
 
 
     while True:
@@ -221,6 +235,9 @@ def receive():
             try:
                 # json.loads成功则说明是来自移动设备的数据,报错就是来自地区服务器
                 message = json.loads(recvMessage)
+
+                blink(num=1, color=lightColor['pkgMobile'])
+
                 print(message, str(time.time()+timeDifference))
                 if message['sendDevice'] == "mobileDevice":
                     newTrace = createTrace(message['name'])
@@ -230,6 +247,9 @@ def receive():
                 # 先读出串的长度，然后按这个长度读出串
                 # 先读出strLength, device_id, ack, 在recvMessage的前6字节
                 strLength, device_id, ack = struct.unpack("iBB", recvMessage[0:6])
+
+                blink(num=1, color=lightColor['pkgGateway'])
+
                 try:
                     # 根据strLength来读取风险匿名名单
                     riskyNamesStr = struct.unpack(str(strLength) + "s", recvMessage[6:6+strLength])
@@ -289,7 +309,7 @@ def printMode():
 
 
 if __name__ == '__main__':
-    
+
     sendToRegionServer = _thread.start_new_thread(sendToRegionServer,())
     thread_receive = _thread.start_new_thread(receive,())
     wakeupThread = _thread.start_new_thread(wakeup,())
