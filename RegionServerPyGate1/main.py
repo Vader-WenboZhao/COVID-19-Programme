@@ -13,7 +13,10 @@ import _thread
 
 
 # PC部分的IP地址和端口号
-PCAddr = ('172.19.157.52', 3000)
+PCIP = input("\nInput PC part's IP address:")
+PCPort = input("Input PC part's port number:")
+
+PCAddr = (PCIP, int(PCPort))
 # Wi-Fi ssid
 wifissid = 'wenbo_TP-LINK'
 # Wi-Fi Passcode
@@ -22,6 +25,10 @@ wifiPasscode = "13860666"
 NTPServer = "time.dlut.edu.cn"
 # 发送trace信息给PC端的时间间隔
 sendTraceInterval = 1
+# 是否从PC端收到ACK
+ACKFromPC = False
+# 重复发送给PC的时间间隔 (s)
+resendToPCInterval = 5
 
 
 '''
@@ -93,47 +100,70 @@ def blink(num = 3, period = .5, color = 0):
 
 # 和PC端通信的线程: 发送数据(trace数据)
 def sendToPCPart():
+    global ACKFromPC
     global localTraces
     global sendTraceInterval
+    global resendToPCInterval
 
     while True:
-        # 内存中没有暂存的trace数据
-        if len(localTraces) == 0:
-            time.sleep(1)
-            continue
         try:
-            # 把本地暂存的trace数据发送给PC端
-            messageToSend = bytes(str(localTraces[0]), 'utf-8')
-            socketToPC.send(messageToSend)
-            localTraces.remove(localTraces[0])
-            time.sleep(sendTraceInterval)
+            # 内存中没有暂存的trace数据
+            if len(localTraces) > 0:
+                try:
+                    # 把本地暂存的trace数据发送给PC端
+                    messageToSend = bytes(str(localTraces[0]), 'utf-8')
+                    socketToPC.send(messageToSend)
+                    ACKFromPC = False
+                    time.sleep(sendTraceInterval)
+                    # 重复发送, 一个最多发送3次
+                    count = 1
+                    while (not ACKFromPC) and count<=3:
+                        socketToPC.send(messageToSend)
+                        count += 1
+                        time.sleep(resendToPCInterval)
+                    localTraces.remove(localTraces[0])
+                    time.sleep(sendTraceInterval)
+                except BaseException as be:
+                    print(be, "at sendToPCPart")
+                    time.sleep(5)
+                    continue
+            else:
+                time.sleep(1)
+                continue
         except BaseException as be:
             print(be, "at sendToPCPart")
-            time.sleep(5)
             continue
+
 
 
 # 和PC端通信的线程: 接收数据(风险名单)
 def recvFromPCPart():
     global riskyNames
+    global ACKFromPC
 
     while True:
-        recvTCPData = socketToPC.recv(512)
+        try:
+            recvTCPData = socketToPC.recv(512)
 
-        blink(num=1, period=.5, color=0x1F1F1F)
+            blink(num=1, period=.5, color=0x1F1F1F)
 
-        # 风险名单为空
-        if recvTCPData == b'[]' or b'':
+            # 风险名单为空
+            if recvTCPData == b'[]' or b'':
+                continue
+            # bytes数据转str
+            msg = recvTCPData.decode('utf-8')
+            print("recv from PC part:", msg)
+            # str数据转list
+            msg = eval(msg)
+            if isinstance(msg, list):
+                # list数据转set, 因为set不能用于网络传输
+                ACKFromPC = True
+                msg = set(msg)
+                riskyNames = msg
+        except BaseException as be:
+            print(be, "at recvFromPCPart")
             continue
-        # bytes数据转str
-        msg = recvTCPData.decode('utf-8')
-        print("recv from PC part:", msg)
-        # str数据转list
-        msg = eval(msg)
-        if isinstance(msg, list):
-            # list数据转set, 因为set不能用于网络传输
-            msg = set(msg)
-            riskyNames = msg
+
 
 
 # 接收来自场所设备的信息, 使用struct库
@@ -181,6 +211,9 @@ def recvFromFixedDevice():
         except BaseException as be:
             continue
 
+def printLocalTraces():
+    global localTraces
+    print(localTraces)
 
 
 if __name__ == '__main__':

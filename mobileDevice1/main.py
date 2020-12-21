@@ -20,11 +20,11 @@ riskyNames = []
 usedNames = []
 
 # 发送一次匿名信息之后的休眠时常 (s)
-sleepTimeInterval = 30
+sleepTimeInterval = 10
 # 检查当前匿名已使用时长的间隔时间 (s)
 checkTimeInterval = 10
 # 更换匿名的周期 (s)
-changeNameInterval = 20 * 60
+changeNameInterval = 5 * 60
 # 匿名长度
 nameLength = 16
 # 健康状态指示灯闪烁间隔时间 (s)

@@ -26,7 +26,7 @@ print("IP Address:", HOST, "\n"+'-'*80)
 # 修改风险名单的网站, 腾讯云服务器
 RISKYADRESS = f'http://121.4.89.43:5000/'
 # 默认的注册节点, 可修改为区块链里任意的某个节点
-registerAddress = "http://172.19.157.52:8000"
+registerAddress = "http://172.19.192.100:8000"
 # 本机的地址
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 
@@ -34,7 +34,10 @@ myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 socketPyGate = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 socketPyGate.setblocking(True)
 # PyGate的IP地址+端口号
-listenAddrFromPyGate = (HOST, 3000)
+
+portToPyGate = int(input("Input the port number to PyGate part:"))
+
+listenAddrFromPyGate = (HOST, portToPyGate)
 socketPyGate.bind(listenAddrFromPyGate)
 
 # 内存中的风险名单
@@ -498,25 +501,29 @@ def recvFromPyGatePart():
     # 一旦建立连接就立刻发送风险匿名名单给PyGate端
     connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
     while True:
-        data = connection.recv(1024)
-        # 查重, 避免因为设备原因连续收到同一条trace
-        if data == latestMessage:
+        try:
+            data = connection.recv(1024)
+            # 查重, 避免因为设备原因连续收到同一条trace
+            if data == latestMessage:
+                continue
+            else:
+                latestMessage = data
+            # if not self.data:
+            #     continue
+            data = eval(str(data, encoding='utf-8'))
+            print("receive from fixed devices:\n", data)
+            # 接收PyGate发来的trace信息, 创建trace、上传到区块链上
+            result = newTrace(data['pseudonym'], data['timestamp'], data['location'])
+            # print(result[0])
+            print('-'*80)
+            # 更新风险匿名名单
+            renewRiskyPseudonymes()
+            # 将风险匿名名单发送给PyGate端
+            connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
             continue
-        else:
-            latestMessage = data
-        # if not self.data:
-        #     continue
-        data = eval(str(data, encoding='utf-8'))
-        print("receive from fixed devices:\n", data)
-        # 接收PyGate发来的trace信息, 创建trace、上传到区块链上
-        result = newTrace(data['pseudonym'], data['timestamp'], data['location'])
-        # print(result[0])
-        print('-'*80)
-        # 更新风险匿名名单
-        renewRiskyPseudonymes()
-        # 将风险匿名名单发送给PyGate端
-        connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
-        continue
+        except BaseException as be:
+            print(be)
+            continue
     connection.close()
 
 
