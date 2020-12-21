@@ -1,57 +1,45 @@
+# from urllib.parse import urlparse
 from hashlib import sha256
 from flask import Flask, jsonify, request
-import getIp
 
-# import socketserver
 import threading
 import requests
 import json
-import socket
 import time
-import sys
+import getIp
 
 '''
 可以修改的地方:
 1.PORT
 2.registerAddress
-3.listenAddrFromPyGate的port
 '''
 
+MyIP = getIp.get_host_ip()
 # 本机IP地址
-HOST = str(getIp.get_host_ip())
+HOST = str(MyIP)
 # 区块链相关端口
-PORT = 8000
-print("IP Address:", HOST, "\n"+'-'*80)
+PORT = 5010
 
 # 修改风险名单的网站, 腾讯云服务器
 RISKYADRESS = f'http://121.4.89.43:5000/'
+# 风险时间范围, 默认为2h, 前后TIMERANGE时间范围内算作有风险
+TIMERANGE = 7200
+
 # 默认的注册节点, 可修改为区块链里任意的某个节点
 registerAddress = "http://172.19.192.100:8000"
 # 本机的地址
 myAddress = "http://" + HOST + ':' + str(PORT) + '/'
 
-# 和PyGate相连接的socket
-socketPyGate = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-socketPyGate.setblocking(True)
-# PyGate的IP地址+端口号
 
-portToPyGate = int(input("Input the port number to PyGate part:"))
-
-listenAddrFromPyGate = (HOST, portToPyGate)
-socketPyGate.bind(listenAddrFromPyGate)
-
-# 内存中的风险名单
 riskyPseudonyms = set()
 
-# 最后收到的来自PyGate的消息, 用于消除重复
-latestMessage = None
+'''
+区块链部分代码的注释见RegionServerPC的代码
+'''
 
-
-# 区块类
 class Block:
     def __init__(self, index, traces, timestamp, previous_hash, nonce=0):
         self.index = index
-        # traces是主要数据
         self.traces = traces
         self.timestamp = timestamp
         self.previous_hash = previous_hash
@@ -65,15 +53,12 @@ class Block:
         return sha256(block_string.encode()).hexdigest()
 
 
-# 区块链类
 class Blockchain:
     # difficulty of our PoW algorithm
     difficulty = 2
 
     def __init__(self):
-        # 池中的trace, 此项目中池中始终为0
         self.unconfirmed_traces = []
-        # block的列表
         self.chain = []
 
     def create_genesis_block(self):
@@ -128,7 +113,6 @@ class Blockchain:
     def add_new_trace(self, trace):
         self.unconfirmed_traces.append(trace)
 
-    # 检查块的合法性
     @classmethod
     def is_valid_proof(cls, block, block_hash):
         """
@@ -138,7 +122,6 @@ class Blockchain:
         return (block_hash.startswith('0' * Blockchain.difficulty) and
                 block_hash == block.compute_hash())
 
-    # 检查区块链的合法性
     @classmethod
     def check_chain_validity(cls, chain):
         result = True
@@ -183,6 +166,7 @@ class Blockchain:
         return True
 
 
+
 app = Flask(__name__)
 
 # the node's copy of blockchain
@@ -202,9 +186,6 @@ blockchain.create_genesis_block()
 # /pending_tx
 '''
 
-
-
-
 # the address to other participating members of the network
 peers = set()
 
@@ -213,16 +194,16 @@ peers = set()
 # our application to add new data (posts) to the blockchain
 @app.route('/new_trace', methods=['POST'])
 def new_trace():
-    traceData = request.get_json()
-    # 一条trace所需的参数
+    tx_data = request.get_json()
     required_fields = ["pseudonym", "traceTime", "location"]
 
-    # 检查是否包含全部所需参数
     for field in required_fields:
-        if not traceData.get(field):
+        if not tx_data.get(field):
             return "Invalid trace data", 404
 
-    blockchain.add_new_trace(traceData)
+    # tx_data["timestamp"] = time.time()
+
+    blockchain.add_new_trace(tx_data)
     mine_unconfirmed_traces()
 
     return "Success", 201
@@ -312,7 +293,6 @@ def register_with_existing_node():
         return response.content, response.status_code
 
 
-# 根据收到的json信息创建blockchain对象
 def create_chain_from_dump(chain_dump):
     generated_blockchain = Blockchain()
     generated_blockchain.create_genesis_block()
@@ -359,7 +339,6 @@ def get_pending_tx():
     return json.dumps(blockchain.unconfirmed_traces)
 
 
-# 共识算法, 确定最长链, 必须使单个节点创建区块的速度能力小于所有节点产生区块的速度, 防篡改
 def consensus():
     """
     Our naive consnsus algorithm. If a longer valid chain is
@@ -385,7 +364,6 @@ def consensus():
     return False
 
 
-# 通知其他节点本节点创建了新区块
 def announce_new_block(block):
     """
     A function to announce to the network once a block has been mined.
@@ -401,55 +379,141 @@ def announce_new_block(block):
 
 
 
-'''
-和Flask框架无关的的函数
-'''
+# 向服务器添加风险匿名, 通过命令行操作
+def addPseudonyms(nameList):
+    if not isinstance(nameList, list):
+        return False, "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList))
 
-# 刷新本地的风险匿名名单
-def renewRiskyPseudonymes():
-    global RISKYADRESS
-    global riskyPseudonyms
+    for name in nameList:
+        if not isinstance(name, str):
+            return False, 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name))
 
-    # 访问专门的网站, 云服务器
-    response = requests.get(RISKYADRESS + f'risky/names')
+    # 函数内部是一个一个添加
+    for name in nameList:
+        data = {'riskyName':name}
+        try:
+            # 通过HTTP添加
+            response = requests.post(RISKYADRESS + f'risky/add', json=data)
+            # 成功
+            if response.status_code == 201:
+                continue
+            else:
+                return False, "Failed to add risky pseudonym " + name
+        except BaseException as be:
+            print(be)
+            return False, "Failed to add risky pseudonym " + name
 
-    # 成功获取名单数据
-    if response.status_code == 200:
-        riskyPseudonymList = response.json()['riskyPseudonyms']
-        riskyPseudonyms = set(riskyPseudonymList)
-    else:
-        return False, "Error in renewRiskyPseudonymes"
-
-    return True, "Successfully get risky pseudonyms"
+    return True, "Successfully add all the risky pseudonyms"
 
 
-# 以字典组成的列表形式返回区块链数据(便于输出)
-def chainData():
+
+# 从服务器删除风险匿名, 通过命令行操作
+def removePseudonyms(nameList):
+    if not isinstance(nameList, list):
+        return False, "Wrong data type. Pseudonyms should be a list, now it's a " + str(type(nameList))
+
+    for name in nameList:
+        if not isinstance(name, str):
+            return False, 'Wrong data type: ' + str(name) + ". Its type is " + str(type(name))
+
+    for name in nameList:
+        data = {'riskyName':name}
+        try:
+            # 通过HTTP删除
+            response = requests.post(RISKYADRESS + f'risky/delete', json=data)
+            # 成功
+            if response.status_code == 201:
+                continue
+            else:
+                return False, "Failed to add risky pseudonym " + name
+        except BaseException as be:
+            print(be)
+            return False, "Failed to add risky pseudonym " + name
+
+    return True, "Successfully remove risky pseudonyms"
+
+
+
+# 返回多个患者的多个踪迹的(时间-地点)元组
+def findPatientTimeLocation(patientPseudonymList):
+    global blockchain
+    # patientPseudonymList是字符串列表[n, n, n, ...]
+    for name in patientPseudonymList:
+        if not isinstance(name, str):
+            print("Error: invalid data type!")
+            return False
+        continue
+    result = []
+    for blk in blockchain.chain:
+        # 没有任何trace
+        if len(blockchain.chain) == 1:
+            return []
+        for trace in blk.traces:
+            # trace = eval(trace)
+            if trace['pseudonym'] in patientPseudonymList:
+                # 元组形式
+                result.append((trace['traceTime'], trace['location']))
+    # 结果形式: [(t,l), (t,l), (t,l), ...]
+    return result
+
+
+
+# 根据时间和地点查找风险匿名
+def findRiskyPseudonyms(searchTime, searchLocation):
+    global blockchain
+
+    searchTime = int(searchTime)
+    searchResult = set()
+    for block in blockchain.chain:
+        for trace in block.traces:
+            # trace = eval(trace)
+            if (searchTime - TIMERANGE) <= int(trace['traceTime']) <= (searchTime + TIMERANGE) and trace['location'] == searchLocation:
+                searchResult.add(trace['pseudonym'])
+    # searchResult是一个字符串集合
+    return searchResult
+
+
+# 操作 findPatientTimeLocation, findRiskyPseudonyms, addPseudonyms
+def addRiskyPseudonyms(patientPseudonymList):
+    global blockchain
+    # patientTimeLocationTuples形式: [(t,l), (t,l), (t,l), ...]
+    patientTimeLocationTuples = findPatientTimeLocation(patientPseudonymList)
+
+    # 这些患者没有轨迹
+    if len(patientTimeLocationTuples) == 0:
+        return addPseudonyms(patientPseudonymList)
+
+    for TLtuple in patientTimeLocationTuples:
+        # riskyPseudonyms是个集合
+        riskyPseudonyms = findRiskyPseudonyms(TLtuple[0], TLtuple[1])
+        riskyPseudonyms = list(riskyPseudonyms)
+    # 返回类型是 (Bool, str)
+    return addPseudonyms(riskyPseudonyms)
+
+
+
+# 操作 removePseudonyms
+def deleteRiskyPseudonym(riskyPseudonymList):
+    # riskyPseudonymList是个字符串列表
+    for name in riskyPseudonymList:
+        if not isinstance(name, str):
+            print("Error: invalid data type!")
+            return False
+        continue
+    # return (Bool, str)
+    return removePseudonyms(riskyPseudonymList)
+
+
+# 打印区块链,先将区块链转化为字典组成的列表
+def printChain():
     chain_data = []
     for block in blockchain.chain:
         chain_data.append(block.__dict__)
-    return chain_data
+    print(chain_data)
+    return
 
 
-# 根据name、time、location创建新的trace
-def newTrace(name, time, loca):
-    # 检查数据类型
-    if not isinstance(name, str) or not isinstance(time, int) or not isinstance(loca, str):
-        return False, 'Wrong data type'
-
-    data = {'pseudonym':name, 'traceTime':time, 'location':loca}
-
-    try:
-        blockchain.add_new_trace(data)
-        mine_unconfirmed_traces()
-    except BaseException as e:
-        traceback.print_exc()
-        return False, "newTrace() failed to add new trace"
-
-    return True, "Successfully added new trace"
-
-
-# 注册到区块链, 即调用自己的register_with函数
+# 在区块链里注册节点
 def register():
     global registerAddress
     global myAddress
@@ -461,108 +525,64 @@ def register():
         return False, "Register failed " + str(response.status_code)
 
 
-# 命令行操作进程(后台使用)
+
+#
+def renewRiskyPseudonymes():
+    global RISKYADRESS
+    global riskyPseudonyms
+
+    response = requests.get(RISKYADRESS + f'risky/names')
+
+    if response.status_code == 200:
+        riskyPseudonymList = response.json()['riskyPseudonyms']
+        riskyPseudonyms = set(riskyPseudonymList)
+    else:
+        return False, "Error in renewRiskyPseudonymes()"
+
+    return True, "Successfully get risky pseudonyms"
+
+
+# 操作进程, 命令行
 def operation_thread():
-    global connectedAddrList
     while True:
         try:
-            global ContactTracingBlockchain
-            print("Orders: register, peers, chain, trace, risky, quit")
-            order = input("Input order: \n")
-            if order == "trace":
-                values = input("Name, time, location in list:")
-                values = eval(values)
-                print(newTrace(values[0], values[1], values[2])[1])
-            elif order == "chain":
-                print(chainData())
-            elif order == "risky":
-                renewRiskyPseudonymes()
-                print(riskyPseudonyms)
-            elif order == "register":
+            global blockchain
+            renewRiskyPseudonymes()
+            print("Orders: register, peers, risky, add, delete, chain, quit")
+            order = input("Input order: ")
+            if order == "register":
                 print(register()[1])
             elif order == "peers":
                 print(peers)
+            elif order == "add":
+                # 输入list
+                patientPseudonymList = input("patient's pseudonyms, in the form of list: ")
+                patientPseudonymList = eval(patientPseudonymList)
+                print(addRiskyPseudonyms(patientPseudonymList)[1])
+            elif order == "delete":
+                # 输入list
+                riskyPseudonymListToDelete = input("risky pseudonyms to delete, in the form of list: ")
+                riskyPseudonymListToDelete = eval(riskyPseudonymListToDelete)
+                print(deleteRiskyPseudonym(riskyPseudonymListToDelete)[1])
+            elif order == "chain":
+                printChain()
+            elif order == "risky":
+                print(riskyPseudonyms)
             elif order == "quit":
-                return
+                pass
             else:
-                print("Valid order")
-            print("\n"+'-'*80)
-        except BaseException as e:
-            traceback.print_exc()
-            continue
-
-
-# 和PyGate通信的进程
-def recvFromPyGatePart():
-    global latestMessage
-    socketPyGate.listen(5)
-    # 建立客户端连接
-    connection, addr = socketPyGate.accept()
-    print("\nConnected successfully, PyGate part's address:", addr, "\n"+'-'*80)
-    # 一旦建立连接就立刻发送风险匿名名单给PyGate端
-    connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
-    while True:
-        try:
-            data = connection.recv(1024)
-            # 查重, 避免因为设备原因连续收到同一条trace
-            if data == latestMessage:
-                continue
-            else:
-                latestMessage = data
-            # if not self.data:
-            #     continue
-            data = eval(str(data, encoding='utf-8'))
-            print(data)
-            print("receive from fixed devices:\n", data)
-            # 接收PyGate发来的trace信息, 创建trace、上传到区块链上
-            result = newTrace(data['pseudonym'], data['timestamp'], data['location'])
-            # print(result[0])
-            print('-'*80)
-            # 更新风险匿名名单
-            renewRiskyPseudonymes()
-            # 将风险匿名名单发送给PyGate端
-            connection.send(bytes(str(list(riskyPseudonyms)), 'utf-8'))
-            continue
-        except BaseException as e:
-            traceback.print_exc()
-            continue
-    connection.close()
-
-
-# 每分钟自动保存区块链信息到本地文件, 防止数据丢失
-def autoSave():
-    global blockchain
-    # 获取当前任务的文件的路径
-    workPath = sys.path[0]
-    print(workPath, "\n"+'-'*80)
-    while True:
-        try:
-            f = open(workPath + '/blockchain.txt', 'w')
-            f.write(str(chainData()))
-            f.close()
-            # 每分钟写入一次
-            time.sleep(60)
+                print("Invalid order")
         except BaseException as be:
-            print(be, "in autoSave function")
-
-
+            print(be)
+            continue
 
 
 
 
 if __name__ == '__main__':
 
-    renewRiskyPseudonymes()
-    # 区块链数据自动保存线程
-    thread_autosave = threading.Thread(target=autoSave)
-    thread_autosave.start()
-    # 与PyGate通信的线程
-    thread_pygate = threading.Thread(target=recvFromPyGatePart)
-    thread_pygate.start()
-    # 命令行操作线程
     thread_ope = threading.Thread(target=operation_thread)
     thread_ope.start()
-
 
     from argparse import ArgumentParser
 
@@ -572,8 +592,3 @@ if __name__ == '__main__':
     port = args.port
 
     app.run(host=HOST, port=port)
-
-    '''
-    server = socketserver.ThreadingTCPServer(listenAddrFromPyGate, HandlerForPyGate)   # 多线程交互
-    server.serve_forever()
-    '''

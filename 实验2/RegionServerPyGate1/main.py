@@ -18,9 +18,9 @@ PCPort = input("Input PC part's port number:")
 
 PCAddr = (PCIP, int(PCPort))
 # Wi-Fi ssid
-wifissid = 'WiLNA305'
+wifissid = 'wenbo_TP-LINK'
 # Wi-Fi Passcode
-wifiPasscode = "305netlab"
+wifiPasscode = "13860666"
 # NTP 服务器地址, 连接校园网的情况下只能访问 time.dlut.edu.cn, 其他情况可以 ntp.aliyun.com
 NTPServer = "time.dlut.edu.cn"
 # 发送trace信息给PC端的时间间隔
