@@ -67,10 +67,10 @@ def createTrace(pseudonym):
 lora = LoRa(mode=LoRa.LORA, region=LoRaBand, bandwidth=LoRa.BW_125KHZ, coding_rate=LoRa.CODING_4_8, sf=9, tx_power=14)
 # 和移动设备通信的socket
 socketToMobileDevice = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
-socketToMobileDevice.setblocking(True)
+socketToMobileDevice.setblocking(False)
 # 和地区服务器通信的socket
 socketToRegionServer = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
-socketToRegionServer.setblocking(True)
+socketToRegionServer.setblocking(False)
 # 接收socket, 阻塞
 socketReceive = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
 socketReceive.setblocking(True)
