@@ -9,8 +9,7 @@ LoRaBand = LoRa.EU868
 
 pycom.heartbeat(False)
 
-savePath = input("Input file name: ")
-savePath += ".txt"
+savePath = "records.txt"
 
 # LED灯闪烁
 def blink(num = 3, period = .5, color = 0):

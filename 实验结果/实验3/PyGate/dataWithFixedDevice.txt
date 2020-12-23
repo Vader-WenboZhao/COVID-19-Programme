@@ -1,0 +1,32 @@
+51
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+51
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc1'  
+52
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+52
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc2'  
+53
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+53
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc3'  
+54
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+54
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc4'  
+55
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+55
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc5'  
+56
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+56
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc5'  
+56
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+57
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc6'  
+57
+recv_timestamp_request  {'sendDevice': 'fixedDevice', 'timeAsk': True}  
+58
+send_timestamp_ACK  b'\x01\x01_\xe2\x0e\xc7'  

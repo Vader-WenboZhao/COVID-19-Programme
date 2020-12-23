@@ -16,25 +16,25 @@ maxPackageNum = 999999
 
 
 # 该场所设备代表的地点(推荐编号表示)
-LOCATION = 'ABC12345'
+LOCATION = 'BuildingB'
 
 pycom.heartbeat(False)
 
 LoRaBand = LoRa.EU868
 
 # 自己的编号大小为 1 byte
-DEVICE_ID = 0x01
+DEVICE_ID = 0x02
 
 
 riskyPseudonymSet = set()
 localTraces = []
 
 # 信号RSSI阈值
-threshold = -1000
+threshold = -103
 # 未收到ACK重复发送trace时间间隔, 因为硬件限制必须大于 2, 否则接收不到ACK (s)
-resendTraceInterval = 3
+resendTraceInterval = 2
 # 发送唤醒信息的时间间隔, 应小于移动设备的休眠时长 (s)
-wakeUpTimeInterval = 3
+wakeUpTimeInterval = 2
 # 是否收到地区服务器的ACK
 HasReceived = False
 # 时间校对成功标志
@@ -48,9 +48,9 @@ communicateWithGateway = True
 # 模式变化标志位, 针对接收线程
 modeChange = False
 # 和移动设备通信的时长 (s)
-TIMELENGTHMOBILE = 4 * 60
+TIMELENGTHMOBILE = 12
 # 和网关通信的时长 (s)
-TIMELENGTHGATEWAY = 1 * 60
+TIMELENGTHGATEWAY = 5
 # 模式检查的时间间隔 (s)
 modeRenewInterval = 1
 # 灯光 pkgGateway:亮紫色, pkgMobile:亮黄色, modeGateway:暗紫色, modeMobile:暗黄色

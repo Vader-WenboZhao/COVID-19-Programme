@@ -30,4 +30,4 @@ while True:
     message = str(myrandom.RandomInt(999))
     mySocket.send(message)
     blink(num=1, period=0.5, color = 0x0F000F)
-    time.sleep(.5)
+    time.sleep(1)

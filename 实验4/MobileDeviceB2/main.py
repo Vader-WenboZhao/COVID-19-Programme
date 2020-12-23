@@ -20,16 +20,16 @@ riskyNames = []
 usedNames = []
 
 # 移动设备编号
-DEVICE_ID = '01'
+DEVICE_ID = 'B2'
 
 
 # 实验3发包计数
 packageCount = 0
 # 实验3 最大发包数
-maxPackageNum = 100
+maxPackageNum = 60
 
 # 发送一次匿名信息之后的休眠时常 (s)
-sleepTimeInterval = 15
+sleepTimeInterval = 20
 # 检查当前匿名已使用时长的间隔时间 (s)
 checkTimeInterval = 10
 # 更换匿名的周期 (s)

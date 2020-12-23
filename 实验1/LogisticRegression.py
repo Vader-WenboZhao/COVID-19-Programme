@@ -18,8 +18,8 @@ def readFile(path):
     f.close()
     return data, len(data)
 
-outdoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/KNN/data/outdoor_sf12_txpower2_tcenter.txt')
-indoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/KNN/data/indoor_sf12_txpower2_tcenter.txt')
+outdoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/records_C/outbuilding.txt')
+indoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/records_C/inbuilding.txt')
 RSSIdata = outdoorData[0] + indoorData[0]
 labels = ([0]*outdoorData[1]) + ([1]*indoorData[1])
 
@@ -63,12 +63,16 @@ model.fit(X_train,y_train)
 
 leastDifference = 100
 result = None
+sum = 0
+for i in range(0,5):
+    for x in range(-150,0,1):
+        temp = model.predict_proba([[x]])[0]
+        if abs(temp[0]-temp[1]) < leastDifference:
+            leastDifference = abs(temp[0]-temp[1])
+            result = x
+    sum += result
 
-for x in range(-150,0,1):
-    temp = model.predict_proba([[x]])[0]
-    if abs(temp[0]-temp[1]) < leastDifference:
-        leastDifference = abs(temp[0]-temp[1])
-        result = x
+result = sum/5
 
 print(result)
 print(model.predict_proba([[result]])[0])
