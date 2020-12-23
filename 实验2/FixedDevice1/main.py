@@ -56,7 +56,11 @@ modeRenewInterval = 1
 # 灯光 pkgGateway:亮紫色, pkgMobile:亮黄色, modeGateway:暗紫色, modeMobile:暗黄色
 lightColor = {'pkgGateway':0x00FFFF, 'pkgMobile':0xFFFF00, 'modeGateway':0x001010, 'modeMobile':0x101000}
 
+'''实验记录路径1'''
+dataFileGateway = "dataWithGateway.txt"
 
+'''实验记录路径2'''
+dataFileMobileDevices = "dataWithMobileDevices.txt"
 
 # Fixed_device产生的Trace不带有time
 def createTrace(pseudonym):
@@ -68,6 +72,36 @@ def createTrace(pseudonym):
     # newTrace.sign(PRI_KEY_PATH)
     localTraces.append(newTrace.dictForm())
     return newTrace.dictForm()
+
+
+
+'''
+record和deleteFile用于做实验记录
+'''
+
+def record(strList, filePath):
+    global timeDifference
+    global timeHasReceived
+
+    f = open(filePath, 'a')
+    if timeHasReceived:
+        f.write(str(time.time()+timeDifference)+"   ")
+    else:
+        f.write(str(time.time())+"   ")
+    for string in strList:
+        f.write(string+"  ")
+    f.write("\n")
+    f.close()
+    return True
+
+
+
+def deleteFile(fileName):
+    try:
+        os.remove(fileName)
+        return True
+    except BaseException:
+        return False
 
 
 # use tx_iq to avoid listening to our own messages
@@ -98,14 +132,13 @@ def modeControl():
     global communicateWithGateway
     global TIMELENGTHGATEWAY
     global TIMELENGTHMOBILE
-    global timeDifference
     global modeRenewInterval
     global modeChange
     global lightColor
 
     # 每 modeRenewInterval 秒检查一次
     while True:
-        if (time.time() - timeDifference) % (TIMELENGTHGATEWAY+TIMELENGTHMOBILE) <= TIMELENGTHMOBILE:
+        if (time.time() % (TIMELENGTHGATEWAY+TIMELENGTHMOBILE)) <= TIMELENGTHMOBILE:
             if communicateWithGateway == True:
                 modeChange = True
             communicateWithGateway = False
@@ -134,6 +167,8 @@ def sendToRegionServer():
     global communicateWithGateway
     global modeRenewInterval
     global modeChange
+    global dataFileGateway
+
 
     '''
     时间校对, 误差为秒级
@@ -145,9 +180,18 @@ def sendToRegionServer():
     pkgTime = struct.pack("BB%ds" % len(timeMessage), DEVICE_ID, len(timeMessage), timeMessage)
     socketToRegionServer.send(pkgTime)
 
+    # 记录时间戳请求
+    record(['send_timestamp_request', ''], dataFileGateway)
+
+    time.sleep(1)
+
     # 没有收到时间校对回复则重复请求
     while not timeHasReceived:
         socketToRegionServer.send(pkgTime)
+
+        # 记录时间戳请求
+        record(['send_timestamp_request', ''], dataFileGateway)
+
         time.sleep(1)
         continue
 
@@ -183,6 +227,9 @@ def sendToRegionServer():
         pkgTrace = struct.pack("BB%ds" % len(sendMessage), DEVICE_ID, len(sendMessage), sendMessage)
         socketToRegionServer.send(pkgTrace)
 
+        # 记录发送trace
+        record(['send_trace', ''], dataFileGateway)
+
         # 发送之后等待ACK
         waiting_ack = True
         # 等待一段时间, 等待地区服务器的回复
@@ -193,6 +240,10 @@ def sendToRegionServer():
                 localTraces.remove(localTraces[0])
                 break
             socketToRegionServer.send(pkgTrace)
+
+            # 记录重复发送trace
+            record(['REsend_trace', ''], dataFileGateway)
+
             # 重复发送后等待一段时间
             time.sleep(resendTraceInterval)
         continue
@@ -209,6 +260,8 @@ def receive():
     global communicateWithGateway
     global lightColor
     global threshold
+    global dataFileGateway
+    global dataFileMobileDevices
 
 
     while True:
@@ -230,6 +283,10 @@ def receive():
                     # 设备号是否相同, 是否是自己的请求
                     if (device_id == DEVICE_ID):
                         timeDifference = timeGet
+
+                        # 记录收到时间校对应答
+                        record(['recv_timestamp_ACK', ''], dataFileGateway)
+
                         print("Time difference is", timeDifference)
                         # 时间校对成功
                         timeHasReceived = True
@@ -252,9 +309,15 @@ def receive():
                 blink(num=1, color=lightColor['pkgMobile'])
 
                 print(message, str(time.time()+timeDifference))
+
+                # 记录收到来自移动设备的数据
+                record(['recv_pseudonym', ''], dataFileMobileDevices)
+
                 if message['sendDevice'] == "mobileDevice":
                     newTrace = createTrace(message['name'])
                     continue
+
+
             # json.loads报错就是来自地区服务器
             except BaseException as be1:
                 # 先读出串的长度，然后按这个长度读出串
@@ -275,6 +338,10 @@ def receive():
                 if (ack == 200):
                     waiting_ack = False
                     print("ACK", riskyPseudonymSet, str(time.time()+timeDifference))
+
+                    # 记录收到来网关的ACK和匿名信息
+                    record(['recv_trace_ACK', ''], dataFileGateway)
+
                 else:
                     waiting_ack = False
                     print("Message Failed")
@@ -315,6 +382,10 @@ def wakeup():
         wakeMessageJson = json.dumps(wakeMessage)
         socketToMobileDevice.send(wakeMessageJson)
 
+
+        # 记录广播出的唤醒信息
+        record(['send_wake', ''], dataFileMobileDevices)
+
         # 实验1发包数+1
         packageCount += 1
 
@@ -329,6 +400,11 @@ def printLocalTraces():
 def printMode():
     global communicateWithGateway
     print(communicateWithGateway)
+
+# 清空存储
+def cleanFlash():
+    deleteFile(dataFileGateway)
+    deleteFile(dataFileMobileDevices)
 
 
 if __name__ == '__main__':

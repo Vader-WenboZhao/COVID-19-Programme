@@ -51,7 +51,8 @@ def mainThread():
 def deleteFile(fileName):
     try:
         os.remove(fileName)
+        return True
     except BaseException:
-        pass
+        return False
 
 threadMain = _thread.start_new_thread(mainThread, ())

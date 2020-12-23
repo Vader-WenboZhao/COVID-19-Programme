@@ -18,8 +18,8 @@ def readFile(path):
     f.close()
     return data, len(data)
 
-outdoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/KNN/data/outdoor_sf7_txpower14_tcenter.txt')
-indoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/KNN/data/indoor_sf7_txpower14_tcenter.txt')
+outdoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/KNN/data/outdoor_sf12_txpower2_tcenter.txt')
+indoorData = readFile('/Users/zhaowenbo/wilna305/Fang2/项目/实验1/KNN/data/indoor_sf12_txpower2_tcenter.txt')
 RSSIdata = outdoorData[0] + indoorData[0]
 labels = ([0]*outdoorData[1]) + ([1]*indoorData[1])
 

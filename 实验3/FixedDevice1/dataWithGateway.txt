@@ -1,0 +1,61 @@
+163
+send_timestamp_request  {'timeAsk': True, 'sendDevice': 'fixedDevice'}  
+165
+send_timestamp_request  {'timeAsk': True, 'sendDevice': 'fixedDevice'}  
+166
+send_timestamp_request  {'timeAsk': True, 'sendDevice': 'fixedDevice'}  
+3
+send_timestamp_request    
+4
+send_timestamp_request    
+5
+send_timestamp_request    
+6
+send_timestamp_request    
+7
+send_timestamp_request    
+8
+send_timestamp_request    
+10
+send_timestamp_request    
+11
+send_timestamp_request    
+12
+send_timestamp_request    
+13
+send_timestamp_request    
+14
+send_timestamp_request    
+15
+send_timestamp_request    
+17
+send_timestamp_request    
+18
+send_timestamp_request    
+19
+send_timestamp_request    
+20
+send_timestamp_request    
+21
+send_timestamp_request    
+22
+send_timestamp_request    
+24
+send_timestamp_request    
+25
+send_timestamp_request    
+26
+send_timestamp_request    
+27
+send_timestamp_request    
+28
+recv_timestamp_ACK    
+3
+send_timestamp_request    
+4
+send_timestamp_request    
+4
+recv_timestamp_ACK    
+3   send_timestamp_request    
+4   send_timestamp_request    
+4   recv_timestamp_ACK    

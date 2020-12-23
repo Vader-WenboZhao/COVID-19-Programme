@@ -24,7 +24,7 @@ sleepTimeInterval = 1
 # 检查当前匿名已使用时长的间隔时间 (s)
 checkTimeInterval = 10
 # 更换匿名的周期 (s)
-changeNameInterval = 5 * 60
+changeNameInterval = 2 * 60
 # 匿名长度
 nameLength = 16
 # 健康状态指示灯闪烁间隔时间 (s)
@@ -33,6 +33,9 @@ displayInterval = 2
 latestUpdateTime = None
 # 匿名信息的存储时长(14天)
 outdateTime = 1209600
+
+'''实验记录路径1'''
+dataFileFixedDevice = 'dataWithFixedDevice.txt'
 
 
 H = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -51,6 +54,34 @@ def blink(num = 3, period = .5, color = 0):
         pycom.rgbled(color)
         time.sleep(period)
         pycom.rgbled(0)
+
+
+'''
+record和deleteFile用于做实验记录
+'''
+
+def record(strList, filePath):
+    global timeDifference
+
+    try:
+        f = open(filePath, 'a')
+        f.write(str(time.time())+"   ")
+        for string in strList:
+            f.write(string+"  ")
+        f.write("\n")
+        f.close()
+        return True
+    except BaseException as be:
+        print(be, 'in record()')
+        return False
+
+
+def deleteFile(fileName):
+    try:
+        os.remove(fileName)
+        return True
+    except BaseException:
+        return False
 
 
 # 根据风险等级展现指示灯颜色
@@ -168,6 +199,7 @@ def receiver():
     global riskyNames
     global sleepTimeInterval
     global presentPseudonym
+    global dataFileFixedDevice
 
     while True:
         try:
@@ -176,6 +208,10 @@ def receiver():
             # 收到唤醒信息
             if receivedMessage['sendDevice'] == 'fixedDevice' and ('wake' in receivedMessage.keys()):
                 if receivedMessage['wake']:
+
+                    '''记录被唤醒'''
+                    record(['recv_wake', ''], dataFileFixedDevice)
+
                     # 风险匿名名单, [str, str, str, ...]
                     riskyNames = receivedMessage['riskyNames']
                     print(riskyNames, time.time())
@@ -183,6 +219,10 @@ def receiver():
                     messageToSend = {'name': presentPseudonym, 'sendDevice': 'mobileDevice'}
                     messageToSendJson = json.dumps(messageToSend)
                     socketToFixedDevice.send(messageToSendJson)
+
+                    '''记录发出匿名信息'''
+                    record(['send_pseudonym', ''], dataFileFixedDevice)
+
                     print("sent peudonym:", presentPseudonym)
                     matchRiskyNames()
 
@@ -203,6 +243,10 @@ def printPseudonyms():
     f = open('usedPseudonyms.txt', 'r')
     print(f.read())
     f.close()
+
+# 清空存储
+def cleanFlash():
+    deleteFile(dataFileFixedDevice)
 
 
 if __name__ == '__main__':
