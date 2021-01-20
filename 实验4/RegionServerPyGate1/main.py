@@ -13,9 +13,9 @@ import _thread
 
 
 # Wi-Fi ssid
-wifissid = 'HB'
+wifissid = 'hanpee'
 # Wi-Fi Passcode
-wifiPasscode = "199924hb"
+wifiPasscode = "zhaowenbo"
 # NTP 服务器地址, 连接校园网的情况下只能访问 time.dlut.edu.cn, 其他情况可以 ntp.aliyun.com
 NTPServer = "ntp.aliyun.com"
 # 发送trace信息给PC端的时间间隔
